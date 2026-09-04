@@ -421,11 +421,6 @@ export class SettingsManager {
     root.style.setProperty('--theme-border', theme.borderColor)
     root.style.setProperty('--theme-shadow', theme.shadowColor)
     
-    // Apply gem colors
-    Object.entries(theme.gemColors).forEach(([gemType, color]) => {
-      root.style.setProperty(`--gem-${gemType}`, color)
-    })
-
     // Apply font settings
     root.style.setProperty('--font-family', this.settings.theme.fontFamily)
     root.style.setProperty('--font-size-scale', `${this.settings.theme.fontSize / 100}`)

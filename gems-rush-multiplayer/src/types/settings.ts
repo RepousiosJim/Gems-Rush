@@ -74,7 +74,6 @@ export interface CustomTheme {
   description: string
   author: string
   version: string
-  gemColors: Record<string, string>
   backgroundImage?: string
   backgroundColor: string
   accentColor: string
