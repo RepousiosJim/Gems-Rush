@@ -56,7 +56,6 @@
     "jest-environment-jsdom": "^29.7.0",
     "jest-watch-typeahead": "^2.2.2",
     "tailwindcss": "^4",
-    "tw-animate-css": "^1.3.0",
     "typescript": "^5"
   }
 }
