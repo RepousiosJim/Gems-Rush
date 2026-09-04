@@ -11,16 +11,22 @@ import { stageSystem } from '@/lib/game/StageSystem'
 import { obstacleBlockManager } from '@/lib/game/ObstacleBlockManager'
 import EnhancedMainMenu from '@/components/ui/EnhancedMainMenu'
 import UserOnboarding from '@/components/ui/UserOnboarding'
-import QuickAccessToolbar from '@/components/ui/QuickAccessToolbar'
 import UserDashboard from '@/components/ui/UserDashboard'
-import EnergyDisplay from '@/components/ui/EnergyDisplay'
-import DailyEventBanner from '@/components/ui/DailyEventBanner'
 import GameInterface from '@/components/game/GameInterface'
 import TimeRushMode from '@/components/game/TimeRushMode'
 import StageSelectScreen from '@/components/ui/StageSelectScreen'
 import SettingsModal from '@/components/ui/SettingsModal'
 import StatisticsModal from '@/components/ui/StatisticsModal'
 import { GameGuideModal, CreditsModal } from '@/components/ui/Modal'
+import { Gem } from 'lucide-react'
+
+function formatEventTimeLeft(endTime: number): string {
+  const remaining = endTime - Date.now()
+  if (remaining <= 0) return 'Expired'
+  const hours = Math.floor(remaining / (1000 * 60 * 60))
+  const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60))
+  return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
+}
 
 type AppState = 'menu' | 'game' | 'timeRush' | 'loading' | 'stageSelect'
 type ModalState = 'settings' | 'guide' | 'credits' | 'statistics' | 'dashboard' | null
@@ -1091,11 +1097,13 @@ export default function HomePage() {
   // Show loading screen
   if (!isInitialized || appState === 'loading') {
     return (
-      <div className="min-h-screen bg-gradient-to-br from-indigo-900 via-purple-900 to-pink-900 flex items-center justify-center">
-        <div className="text-center">
-          <div className="text-6xl mb-4">💎</div>
-          <div className="text-white text-2xl font-bold mb-4">Gems Rush</div>
-          <div className="w-12 h-12 border-4 border-white/30 border-t-white rounded-full animate-spin mx-auto"></div>
+      <div className="flex min-h-screen items-center justify-center bg-ink">
+        <div className="flex flex-col items-center gap-4">
+          <Gem className="h-10 w-10 text-gold" />
+          <div className="text-fg text-lg font-semibold">Gems Rush</div>
+          <div className="h-0.5 w-40 overflow-hidden rounded-full bg-ink-2">
+            <div className="h-full w-1/3 animate-pulse rounded-full bg-violet" />
+          </div>
         </div>
       </div>
     )
@@ -1153,28 +1161,16 @@ export default function HomePage() {
 
   // Main menu
   if (appState === 'menu') {
+    const dailyEvent = userStats.currentDailyEvent
+      ? {
+          name: userStats.currentDailyEvent.name,
+          description: userStats.currentDailyEvent.description,
+          timeLeft: formatEventTimeLeft(userStats.currentDailyEvent.endTime),
+        }
+      : null
+
     return (
       <>
-        {/* Daily Event Banner - Compact notification in corner */}
-        <div className="fixed top-4 right-4 z-40 max-w-xs">
-          <DailyEventBanner 
-            currentEvent={userStats.currentDailyEvent as any}
-            onEventClick={() => console.log('Event clicked!')}
-            variant="compact"
-            position="sidebar"
-          />
-        </div>
-
-        {/* Energy Display - Positioned below event banner */}
-        <div className="fixed top-32 right-4 z-30 w-64">
-          <EnergyDisplay
-            energy={userStats.energy}
-            maxEnergy={userStats.maxEnergy}
-            lastEnergyUpdate={userStats.lastEnergyUpdate}
-            onRefillEnergy={handleRefillEnergy}
-          />
-        </div>
-
         <EnhancedMainMenu
           onModeSelect={handleModeSelect}
           onShowSettings={() => setModalState('settings')}
@@ -1182,29 +1178,16 @@ export default function HomePage() {
           onShowCredits={() => setModalState('credits')}
           onShowStats={() => setModalState('statistics')}
           onShowDashboard={handleShowDashboard}
-          currentStage={currentStage}
           userLevel={userStats.level}
           userXP={userStats.xp}
           userCoins={userStats.coins}
           userGems={userStats.gems}
           dailyChallengeCompleted={userStats.dailyChallengeCompleted}
           streak={userStats.streak}
-        />
-
-        {/* Quick access toolbar */}
-        <QuickAccessToolbar
-          onQuickPlay={handleQuickPlay}
-          onShowLeaderboard={() => setModalState('statistics')}
-          onShowDailyChallenge={handleShowDailyChallenge}
-          onShowAchievements={() => setModalState('statistics')}
-          onShowShop={() => console.log('Shop coming soon!')}
-          onShowMultiplayer={() => console.log('Multiplayer coming soon!')}
-          onShowSettings={() => setModalState('settings')}
-          soundEnabled={soundEnabled}
-          onToggleSound={handleToggleSound}
-          dailyChallengeAvailable={!userStats.dailyChallengeCompleted}
-          newAchievements={0}
-          isMultiplayerAvailable={false}
+          energy={userStats.energy}
+          maxEnergy={userStats.maxEnergy}
+          onRefillEnergy={handleRefillEnergy}
+          dailyEvent={dailyEvent}
         />
 
         {/* User onboarding */}
