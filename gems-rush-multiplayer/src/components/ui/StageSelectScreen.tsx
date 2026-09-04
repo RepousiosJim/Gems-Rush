@@ -2,6 +2,7 @@
 
 import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { ArrowLeft, Crown, Lock, Star, Coins, Gem } from 'lucide-react'
 import { stageSystem, Stage } from '@/lib/game/StageSystem'
 
 interface StageSelectScreenProps {
@@ -34,286 +35,209 @@ export default function StageSelectScreen({ onStageSelect, onBackToMenu }: Stage
     const isSelected = selectedStage?.id === stage.id
 
     return (
-      <motion.div
+      <button
         key={stage.id}
-        className={`
-          relative p-4 rounded-2xl border-2 cursor-pointer transition-all duration-300
-          ${isUnlocked 
-            ? isSelected 
-              ? 'border-yellow-400 bg-gradient-to-br from-yellow-500/20 to-orange-500/20 shadow-lg shadow-yellow-400/30'
-              : 'border-white/20 bg-gradient-to-br from-purple-600/20 to-blue-600/20 hover:border-white/40 hover:shadow-lg'
-            : 'border-gray-600 bg-gray-800/50 cursor-not-allowed opacity-60'
-          }
-          ${stage.isBoss ? 'ring-2 ring-red-500/50' : ''}
-        `}
+        type="button"
         onClick={() => handleStageClick(stage)}
-        whileHover={isUnlocked ? { scale: 1.05, y: -5 } : {}}
-        whileTap={isUnlocked ? { scale: 0.95 } : {}}
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.3, delay: stage.id * 0.05 }}
+        disabled={!isUnlocked}
+        className={`card relative p-4 text-left transition-colors ${
+          isUnlocked
+            ? isSelected
+              ? 'border-gold'
+              : 'hover:border-line-strong'
+            : 'opacity-60 cursor-not-allowed'
+        } ${stage.isBoss ? 'border-bad' : ''}`}
       >
-        {/* Stage number */}
         <div className="text-center mb-2">
-          <div className={`
-            text-2xl font-bold
-            ${stage.isBoss ? 'text-red-400' : isCompleted ? 'text-green-400' : 'text-white'}
-          `}>
+          <div className={`text-2xl font-bold ${stage.isBoss ? 'text-bad' : isCompleted ? 'text-good' : 'text-fg'}`}>
             {stage.id}
           </div>
-          {stage.isBoss && (
-            <div className="text-xs text-red-300 font-semibold">BOSS</div>
-          )}
+          {stage.isBoss && <div className="text-xs text-bad font-semibold">BOSS</div>}
         </div>
 
-        {/* Stage icon */}
-        <div className="text-center mb-3">
-          <div className="text-4xl">
-            {stage.isBoss 
-              ? '👑' 
-              : isCompleted 
-                ? '✅' 
-                : isUnlocked 
-                  ? '💎' 
-                  : '🔒'
-            }
-          </div>
+        <div className="flex justify-center mb-3 text-violet">
+          {isUnlocked ? <Gem size={32} /> : <Lock size={32} className="text-fg-dim" />}
         </div>
 
-        {/* Stage name */}
         <div className="text-center mb-2">
-          <div className="text-sm font-semibold text-white/90 truncate">
-            {stage.name}
-          </div>
+          <div className="text-sm font-semibold text-fg truncate">{stage.name}</div>
         </div>
 
-        {/* Stars */}
         {isCompleted && (
           <div className="flex justify-center gap-1 mb-2">
             {[1, 2, 3].map(starNum => (
-              <span
+              <Star
                 key={starNum}
-                className={`text-lg ${starNum <= stars ? 'text-yellow-400' : 'text-gray-600'}`}
-              >
-                ⭐
-              </span>
+                size={16}
+                className={starNum <= stars ? 'text-gold fill-gold' : 'text-fg-dim'}
+              />
             ))}
           </div>
         )}
 
-        {/* Current indicator */}
         {isCurrent && isUnlocked && (
-          <div className="absolute -top-2 -right-2 bg-blue-500 text-white text-xs px-2 py-1 rounded-full font-bold">
-            CURRENT
+          <div className="absolute -top-2 -right-2 chip bg-violet text-ink-on-gold border-0 h-6 px-2 text-xs">
+            Current
           </div>
         )}
 
-        {/* Difficulty indicator */}
-        <div className="absolute bottom-2 left-2">
-          <div className={`
-            text-xs px-2 py-1 rounded-full font-semibold
-            ${stage.difficulty === 'easy' ? 'bg-green-600 text-white' :
-              stage.difficulty === 'medium' ? 'bg-yellow-600 text-white' :
-              stage.difficulty === 'hard' ? 'bg-red-600 text-white' :
-              'bg-purple-600 text-white'}
-          `}>
-            {stage.difficulty.toUpperCase()}
-          </div>
+        <div className="chip absolute bottom-2 left-2 h-6 px-2 text-xs">
+          {stage.difficulty}
         </div>
-
-        {/* Theme indicator */}
-        <div className="absolute bottom-2 right-2">
-          <div className="text-lg">
-            {stage.backgroundTheme === 'forest' ? '🌲' :
-             stage.backgroundTheme === 'ocean' ? '🌊' :
-             stage.backgroundTheme === 'mountain' ? '⛰️' :
-             stage.backgroundTheme === 'volcano' ? '🌋' :
-             '✨'}
-          </div>
-        </div>
-      </motion.div>
+      </button>
     )
   }
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 p-4">
-      {/* Header */}
-      <motion.div 
-        className="flex items-center justify-between mb-6"
-        initial={{ y: -50, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
+    <div className="min-h-screen bg-ink page-glow p-4">
+      <motion.div
+        className="flex items-center justify-between mb-6 h-14 px-2"
+        initial={{ opacity: 0, y: -8 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.2 }}
       >
-        <button
-          onClick={onBackToMenu}
-          className="flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 hover:bg-white/20 transition-all text-white"
-        >
-          <span className="text-xl">🏠</span>
-          <span>Back to Menu</span>
+        <button onClick={onBackToMenu} className="btn btn-icon btn-ghost">
+          <ArrowLeft size={20} />
         </button>
 
         <div className="text-center">
-          <h1 className="text-3xl font-bold text-white mb-2">Stage Select</h1>
-          <div className="text-white/70">
-            Progress: {stageProgress.completedStages.length}/20 stages completed
-          </div>
-          <div className="text-yellow-400 font-semibold">
-            ⭐ {stageProgress.totalStars} total stars
+          <h1 className="text-xl font-bold text-fg">Stages</h1>
+          <div className="text-sm text-fg-muted">
+            {stageProgress.completedStages.length}/{allStages.length} completed
           </div>
         </div>
 
-        <div className="text-right text-white/70">
-          <div className="text-sm">Completion: {Math.round(stageSystem.getCompletionPercentage())}%</div>
+        <div className="chip">
+          <Star size={14} className="text-gold" />
+          {stageProgress.totalStars}
         </div>
       </motion.div>
 
       <div className="flex gap-6">
-        {/* Stage grid */}
         <div className="flex-1">
-          <motion.div 
-            className="grid grid-cols-5 gap-4"
+          <motion.div
+            className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
-            transition={{ delay: 0.2 }}
+            transition={{ duration: 0.2, delay: 0.05 }}
           >
             {allStages.map(stage => renderStageCard(stage))}
           </motion.div>
         </div>
 
-        {/* Stage details panel */}
         <AnimatePresence>
           {selectedStage && (
             <motion.div
-              className="w-96 bg-black/30 backdrop-blur-md rounded-2xl border border-white/20 p-6"
-              initial={{ x: 100, opacity: 0 }}
-              animate={{ x: 0, opacity: 1 }}
-              exit={{ x: 100, opacity: 0 }}
+              className="card w-96 p-6 h-fit"
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 8 }}
+              transition={{ duration: 0.2 }}
             >
               <div className="text-center mb-4">
-                <h2 className="text-2xl font-bold text-white mb-2">
-                  {selectedStage.name}
-                </h2>
+                <h2 className="text-xl font-bold text-fg mb-1">{selectedStage.name}</h2>
                 {selectedStage.isBoss && (
-                  <div className="text-red-400 font-semibold mb-2">👑 BOSS STAGE 👑</div>
+                  <div className="chip mx-auto w-fit text-bad border-bad">
+                    <Crown size={14} /> Boss Stage
+                  </div>
                 )}
-                <div className="text-6xl mb-4">
-                  {selectedStage.backgroundTheme === 'forest' ? '🌲' :
-                   selectedStage.backgroundTheme === 'ocean' ? '🌊' :
-                   selectedStage.backgroundTheme === 'mountain' ? '⛰️' :
-                   selectedStage.backgroundTheme === 'volcano' ? '🌋' :
-                   '✨'}
-                </div>
               </div>
 
-              {/* Stage description */}
-              <div className="mb-4">
-                <p className="text-white/80 text-sm leading-relaxed">
-                  {selectedStage.description}
-                </p>
-              </div>
+              <p className="text-sm text-fg-muted leading-relaxed mb-4">{selectedStage.description}</p>
 
-              {/* Objectives */}
-              <div className="mb-6 space-y-3">
-                <div className="text-white font-semibold mb-2">Objectives:</div>
-                
-                <div className="flex justify-between items-center bg-white/10 rounded-lg p-3">
-                  <span className="text-white/80">Target Score:</span>
-                  <span className="text-yellow-400 font-bold">
-                    {selectedStage.targetScore.toLocaleString()}
-                  </span>
+              <div className="mb-6 space-y-2">
+                <div className="text-sm font-semibold text-fg-dim uppercase tracking-wider mb-1">Objectives</div>
+
+                <div className="flex justify-between items-center card bg-ink-2 p-3">
+                  <span className="text-fg-muted text-sm">Target</span>
+                  <span className="text-gold font-bold tabular-nums">{selectedStage.targetScore.toLocaleString()}</span>
                 </div>
 
-                <div className="flex justify-between items-center bg-white/10 rounded-lg p-3">
-                  <span className="text-white/80">Max Moves:</span>
-                  <span className="text-blue-400 font-bold">
-                    {selectedStage.maxMoves}
-                  </span>
+                <div className="flex justify-between items-center card bg-ink-2 p-3">
+                  <span className="text-fg-muted text-sm">Max Moves</span>
+                  <span className="text-violet font-bold tabular-nums">{selectedStage.maxMoves}</span>
                 </div>
 
-                <div className="flex justify-between items-center bg-white/10 rounded-lg p-3">
-                  <span className="text-white/80">Blocks to Break:</span>
-                  <span className="text-green-400 font-bold">
-                    {selectedStage.blocksToBreak}
-                  </span>
+                <div className="flex justify-between items-center card bg-ink-2 p-3">
+                  <span className="text-fg-muted text-sm">Blocks to Break</span>
+                  <span className="text-good font-bold tabular-nums">{selectedStage.blocksToBreak}</span>
                 </div>
 
-                {/* Special objectives */}
                 {selectedStage.specialObjectives && (
-                  <div className="bg-purple-600/20 rounded-lg p-3">
-                    <div className="text-purple-300 font-semibold mb-2">Special:</div>
+                  <div className="card bg-ink-2 p-3">
+                    <div className="text-violet font-semibold text-sm mb-1">Special</div>
                     {selectedStage.specialObjectives.greenBlocks && (
-                      <div className="text-sm text-white/80">
-                        🟢 Destroy {selectedStage.specialObjectives.greenBlocks} green blocks
+                      <div className="text-sm text-fg-muted">
+                        Destroy {selectedStage.specialObjectives.greenBlocks} green blocks
                       </div>
                     )}
                     {selectedStage.specialObjectives.blueBlocks && (
-                      <div className="text-sm text-white/80">
-                        🔵 Destroy {selectedStage.specialObjectives.blueBlocks} blue blocks
+                      <div className="text-sm text-fg-muted">
+                        Destroy {selectedStage.specialObjectives.blueBlocks} blue blocks
                       </div>
                     )}
                   </div>
                 )}
               </div>
 
-              {/* Rewards */}
               <div className="mb-6">
-                <div className="text-white font-semibold mb-2">Rewards:</div>
+                <div className="text-sm font-semibold text-fg-dim uppercase tracking-wider mb-2">Rewards</div>
                 <div className="grid grid-cols-2 gap-2 text-sm">
-                  <div className="bg-yellow-600/20 rounded-lg p-2 text-center">
-                    <div className="text-yellow-400 font-bold">{selectedStage.rewards.coins}</div>
-                    <div className="text-white/70">Coins</div>
+                  <div className="card bg-ink-2 p-2 text-center">
+                    <div className="text-gold font-bold flex items-center justify-center gap-1">
+                      <Coins size={14} /> {selectedStage.rewards.coins}
+                    </div>
+                    <div className="text-fg-muted text-xs">Coins</div>
                   </div>
-                  <div className="bg-purple-600/20 rounded-lg p-2 text-center">
-                    <div className="text-purple-400 font-bold">{selectedStage.rewards.gems}</div>
-                    <div className="text-white/70">Gems</div>
+                  <div className="card bg-ink-2 p-2 text-center">
+                    <div className="text-violet font-bold flex items-center justify-center gap-1">
+                      <Gem size={14} /> {selectedStage.rewards.gems}
+                    </div>
+                    <div className="text-fg-muted text-xs">Gems</div>
                   </div>
-                  <div className="bg-blue-600/20 rounded-lg p-2 text-center">
-                    <div className="text-blue-400 font-bold">{selectedStage.rewards.xp}</div>
-                    <div className="text-white/70">XP</div>
+                  <div className="card bg-ink-2 p-2 text-center">
+                    <div className="text-fg font-bold">{selectedStage.rewards.xp}</div>
+                    <div className="text-fg-muted text-xs">XP</div>
                   </div>
-                  <div className="bg-yellow-600/20 rounded-lg p-2 text-center">
-                    <div className="text-yellow-400 font-bold">⭐ Up to 3</div>
-                    <div className="text-white/70">Stars</div>
+                  <div className="card bg-ink-2 p-2 text-center">
+                    <div className="text-gold font-bold flex items-center justify-center gap-1">
+                      <Star size={14} /> 3
+                    </div>
+                    <div className="text-fg-muted text-xs">Stars</div>
                   </div>
                 </div>
               </div>
 
-              {/* Progress */}
               {stageSystem.isStageCompleted(selectedStage.id) && (
                 <div className="mb-4">
-                  <div className="text-white font-semibold mb-2">Best Performance:</div>
+                  <div className="text-sm font-semibold text-fg-dim uppercase tracking-wider mb-2">Best Performance</div>
                   <div className="flex justify-center gap-1">
                     {[1, 2, 3].map(starNum => (
-                      <span
+                      <Star
                         key={starNum}
-                        className={`text-2xl ${starNum <= stageSystem.getStageStars(selectedStage.id) ? 'text-yellow-400' : 'text-gray-600'}`}
-                      >
-                        ⭐
-                      </span>
+                        size={20}
+                        className={starNum <= stageSystem.getStageStars(selectedStage.id) ? 'text-gold fill-gold' : 'text-fg-dim'}
+                      />
                     ))}
                   </div>
                 </div>
               )}
 
-              {/* Play button */}
-              <motion.button
+              <button
                 onClick={handlePlayStage}
                 disabled={!stageSystem.isStageUnlocked(selectedStage.id)}
-                className={`
-                  w-full py-3 rounded-xl font-semibold transition-all duration-200
-                  ${stageSystem.isStageUnlocked(selectedStage.id)
-                    ? 'bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700 text-white shadow-lg hover:shadow-xl'
-                    : 'bg-gray-600 text-gray-400 cursor-not-allowed'
-                  }
-                `}
-                whileHover={stageSystem.isStageUnlocked(selectedStage.id) ? { scale: 1.05 } : {}}
-                whileTap={stageSystem.isStageUnlocked(selectedStage.id) ? { scale: 0.95 } : {}}
+                className="btn btn-primary w-full"
               >
-                {stageSystem.isStageUnlocked(selectedStage.id) ? '🎮 Play Stage' : '🔒 Locked'}
-              </motion.button>
+                {stageSystem.isStageUnlocked(selectedStage.id) ? 'Play Stage' : (
+                  <>
+                    <Lock size={16} /> Locked
+                  </>
+                )}
+              </button>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
     </div>
   )
-} 
+}
