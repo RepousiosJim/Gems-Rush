@@ -97,7 +97,7 @@ export default function RootLayout({
         <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
         <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
       </head>
-      <body className="antialiased min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900">
+      <body className="antialiased min-h-screen bg-ink text-fg">
         <ErrorBoundary>
           {/* Main game container */}
           <div id="game-root" className="relative min-h-screen">
