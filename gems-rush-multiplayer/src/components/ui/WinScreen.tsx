@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Star, Coins, Gem as GemIcon, Zap, Home, RotateCcw, ArrowRight } from 'lucide-react'
 import { GameState } from '@/types/game'
 import { SUCCESS_MESSAGES } from '@/lib/game/constants'
 
@@ -50,7 +51,7 @@ export default function WinScreen({
     const comboBonus = Math.floor(gameState.score * 0.2)
     const timeBonus = gameState.gameMode === 'timeAttack' ? Math.floor(gameState.score * 0.1) : 0
     const perfectionBonus = gameState.moves <= 10 ? Math.floor(gameState.score * 0.15) : 0
-    
+
     return {
       baseScore,
       comboBonus,
@@ -114,7 +115,7 @@ export default function WinScreen({
   // Separate effect for score animation that doesn't interfere with phase timing
   useEffect(() => {
     if (!isOpen) return
-    
+
     // Score animation
     const scoreTimer = setTimeout(() => {
       const duration = 1500
@@ -123,9 +124,9 @@ export default function WinScreen({
         const elapsed = Date.now() - startTime
         const progress = Math.min(elapsed / duration, 1)
         const easeOut = 1 - Math.pow(1 - progress, 3)
-        
+
         setDisplayedScore(Math.floor(gameState.score * easeOut))
-        
+
         if (progress < 1) {
           requestAnimationFrame(animate)
         }
@@ -139,7 +140,7 @@ export default function WinScreen({
   // Separate effect for rewards animation
   useEffect(() => {
     if (!isOpen || !showRewards) return
-    
+
     const rewardsTimer = setTimeout(() => {
       const duration = 1000
       const startTime = Date.now()
@@ -147,11 +148,11 @@ export default function WinScreen({
         const elapsed = Date.now() - startTime
         const progress = Math.min(elapsed / duration, 1)
         const easeOut = 1 - Math.pow(1 - progress, 3)
-        
+
         setDisplayedCoins(Math.floor(rewards.coins * easeOut))
         setDisplayedGems(Math.floor(rewards.gems * easeOut))
         setDisplayedXP(Math.floor(rewards.xp * easeOut))
-        
+
         if (progress < 1) {
           requestAnimationFrame(animate)
         }
@@ -162,315 +163,170 @@ export default function WinScreen({
     return () => clearTimeout(rewardsTimer)
   }, [isOpen, showRewards, rewards.coins, rewards.gems, rewards.xp])
 
-  console.log('WinScreen render - isOpen:', isOpen, 'animationPhase:', animationPhase)
-
   if (!isOpen) return null
 
   return (
     <AnimatePresence>
       <motion.div
-        className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+        className="fixed inset-0 z-50 flex items-center justify-center bg-ink/80 backdrop-blur-sm"
         initial={{ opacity: 0 }}
         animate={{ opacity: 1 }}
         exit={{ opacity: 0 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.3 }}
       >
         <motion.div
-          className="relative w-full max-w-2xl mx-4 bg-gradient-to-br from-purple-900/95 via-blue-900/95 to-indigo-900/95 rounded-3xl border border-white/20 backdrop-blur-md shadow-2xl overflow-hidden"
-          initial={{ scale: 0.5, y: 100, opacity: 0 }}
+          className="card relative w-full max-w-md mx-4 p-8 text-center"
+          initial={{ scale: 0.95, y: 20, opacity: 0 }}
           animate={{ scale: 1, y: 0, opacity: 1 }}
-          exit={{ scale: 0.5, y: -100, opacity: 0 }}
-          transition={{ 
-            type: "spring", 
-            stiffness: 300, 
-            damping: 20,
-            duration: 0.6 
-          }}
+          exit={{ scale: 0.95, y: -20, opacity: 0 }}
+          transition={{ duration: 0.25 }}
         >
-          {/* Animated Background Effects */}
-          <div className="absolute inset-0 overflow-hidden">
-            {/* Floating Gems */}
-            {Array.from({ length: 12 }).map((_, i) => (
+          <AnimatePresence mode="wait">
+            {animationPhase === 'celebrating' && (
               <motion.div
-                key={i}
-                className="absolute text-4xl opacity-30"
-                style={{
-                  left: `${Math.random() * 100}%`,
-                  top: `${Math.random() * 100}%`,
-                }}
-                animate={{
-                  y: [-20, 20, -20],
-                  rotate: [0, 360],
-                  scale: [0.8, 1.2, 0.8],
-                }}
-                transition={{
-                  duration: 4 + Math.random() * 2,
-                  repeat: Infinity,
-                  delay: Math.random() * 2,
-                  ease: "easeInOut"
-                }}
+                key="celebration"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="space-y-4"
               >
-                {['💎', '🔥', '💧', '🌍', '⚡', '🌿'][Math.floor(Math.random() * 6)]}
+                <div className="flex justify-center gap-1">
+                  {Array.from({ length: 3 }).map((_, i) => (
+                    <Star key={i} size={40} className="text-fg-dim" />
+                  ))}
+                </div>
+                <h1 className="text-3xl font-bold text-fg tracking-tight">Level complete</h1>
               </motion.div>
-            ))}
+            )}
 
-            {/* Sparkling Particles */}
-            {Array.from({ length: 20 }).map((_, i) => (
+            {(animationPhase === 'rewards' || animationPhase === 'options') && (
               <motion.div
-                key={`particle-${i}`}
-                className="absolute w-2 h-2 bg-yellow-400 rounded-full opacity-60"
-                style={{
-                  left: `${Math.random() * 100}%`,
-                  top: `${Math.random() * 100}%`,
-                }}
-                animate={{
-                  scale: [0, 1, 0],
-                  opacity: [0, 1, 0],
-                }}
-                transition={{
-                  duration: 2,
-                  repeat: Infinity,
-                  delay: Math.random() * 2,
-                  ease: "easeInOut"
-                }}
-              />
-            ))}
-          </div>
+                key="rewards"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="space-y-6"
+              >
+                <div className="space-y-3">
+                  <h1 className="text-2xl font-bold text-fg tracking-tight">Level {gameState.level} complete</h1>
 
-          {/* Main Content */}
-          <div className="relative z-10 p-8 text-center">
-            {/* Celebration Phase */}
-            <AnimatePresence mode="wait">
-              {animationPhase === 'celebrating' && (
-                <motion.div
-                  key="celebration"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -20 }}
-                  className="space-y-6"
-                >
-                  <motion.div
-                    className="text-8xl"
-                    animate={{ 
-                      rotate: [0, 10, -10, 0],
-                      scale: [1, 1.1, 1]
-                    }}
-                    transition={{ 
-                      duration: 1.5, 
-                      repeat: Infinity,
-                      ease: "easeInOut"
-                    }}
-                  >
-                    🏆
-                  </motion.div>
-                  
-                  <motion.h1
-                    className="text-5xl font-bold bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 bg-clip-text text-transparent"
-                    initial={{ scale: 0 }}
-                    animate={{ scale: 1 }}
-                    transition={{ delay: 0.3, type: "spring", stiffness: 300 }}
-                  >
-                    LEVEL COMPLETE!
-                  </motion.h1>
-                  
-                  <motion.div
-                    className="text-2xl text-white/90"
-                    initial={{ opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    transition={{ delay: 0.6 }}
-                  >
-                    🎉 Congratulations! 🎉
-                  </motion.div>
-                </motion.div>
-              )}
+                  <div className="flex justify-center items-center gap-2">
+                    {Array.from({ length: 3 }).map((_, i) => (
+                      <motion.div
+                        key={i}
+                        initial={{ scale: 0 }}
+                        animate={{ scale: 1 }}
+                        transition={{ delay: 0.1 + i * 0.1, type: 'spring', stiffness: 300 }}
+                      >
+                        <Star
+                          size={32}
+                          className={i < earnedStars ? 'text-gold' : 'text-fg-dim'}
+                          fill={i < earnedStars ? 'currentColor' : 'none'}
+                        />
+                      </motion.div>
+                    ))}
+                  </div>
+                </div>
 
-              {/* Rewards Phase */}
-              {(animationPhase === 'rewards' || animationPhase === 'options') && (
-                <motion.div
-                  key="rewards"
-                  initial={{ opacity: 0, y: 20 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  className="space-y-8"
-                >
-                  {/* Level Header */}
-                  <div className="space-y-4">
-                    <h1 className="text-4xl font-bold bg-gradient-to-r from-yellow-400 via-orange-500 to-red-500 bg-clip-text text-transparent">
-                      LEVEL {gameState.level} COMPLETE!
-                    </h1>
-                    
-                    {/* Star Rating */}
-                    <div className="flex justify-center items-center space-x-2">
-                      {Array.from({ length: 3 }).map((_, i) => (
-                        <motion.div
-                          key={i}
-                          className={`text-4xl ${i < earnedStars ? 'text-yellow-400' : 'text-gray-600'}`}
-                          initial={{ scale: 0, rotate: -180 }}
-                          animate={{ scale: 1, rotate: 0 }}
-                          transition={{ 
-                            delay: 2.5 + (i * 0.2),
-                            type: "spring",
-                            stiffness: 300
-                          }}
-                        >
-                          ⭐
-                        </motion.div>
-                      ))}
-                    </div>
+                <div className="card bg-ink-2 p-5">
+                  <div className="stat-label mb-1">Final score</div>
+                  <div className="stat-value text-3xl text-gold">{displayedScore.toLocaleString()}</div>
+                  <div className="text-xs text-fg-dim mt-1">
+                    Target: {gameState.targetScore.toLocaleString()}
+                    <span className="text-good ml-2">
+                      (+{Math.round(((gameState.score / gameState.targetScore) - 1) * 100)}%)
+                    </span>
                   </div>
 
-                  {/* Score Display */}
-                  <motion.div
-                    className="bg-black/30 rounded-2xl p-6 backdrop-blur-sm border border-white/10"
-                    initial={{ scale: 0.9, opacity: 0 }}
-                    animate={{ scale: 1, opacity: 1 }}
-                    transition={{ delay: 3 }}
+                  <button
+                    onClick={() => setShowBreakdown(!showBreakdown)}
+                    className="mt-3 text-violet text-xs underline"
                   >
-                    <div className="space-y-4">
-                      <div className="text-lg text-purple-300">Final Score</div>
-                      <motion.div 
-                        className="text-5xl font-bold text-white"
-                        animate={{ scale: displayedScore > 0 ? [1, 1.1, 1] : 1 }}
-                        transition={{ duration: 0.3 }}
-                      >
-                        {displayedScore.toLocaleString()}
-                      </motion.div>
-                      <div className="text-sm text-gray-400">
-                        Target: {gameState.targetScore.toLocaleString()} 
-                        <span className="text-green-400 ml-2">
-                          (+{Math.round(((gameState.score / gameState.targetScore) - 1) * 100)}%)
-                        </span>
-                      </div>
-                      
-                      {/* Score Breakdown Toggle */}
-                      <button
-                        onClick={() => setShowBreakdown(!showBreakdown)}
-                        className="text-blue-400 hover:text-blue-300 text-sm underline transition-colors"
-                      >
-                        {showBreakdown ? 'Hide' : 'Show'} Score Breakdown
-                      </button>
-                      
-                      <AnimatePresence>
-                        {showBreakdown && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            className="overflow-hidden space-y-2 pt-4 border-t border-white/10"
-                          >
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-400">Base Score:</span>
-                              <span className="text-white">{scoreBreakdown.baseScore.toLocaleString()}</span>
-                            </div>
-                            <div className="flex justify-between text-sm">
-                              <span className="text-gray-400">Combo Bonus:</span>
-                              <span className="text-yellow-400">{scoreBreakdown.comboBonus.toLocaleString()}</span>
-                            </div>
-                            {scoreBreakdown.timeBonus > 0 && (
-                              <div className="flex justify-between text-sm">
-                                <span className="text-gray-400">Time Bonus:</span>
-                                <span className="text-green-400">{scoreBreakdown.timeBonus.toLocaleString()}</span>
-                              </div>
-                            )}
-                            {scoreBreakdown.perfectionBonus > 0 && (
-                              <div className="flex justify-between text-sm">
-                                <span className="text-gray-400">Perfection Bonus:</span>
-                                <span className="text-purple-400">{scoreBreakdown.perfectionBonus.toLocaleString()}</span>
-                              </div>
-                            )}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  </motion.div>
+                    {showBreakdown ? 'Hide' : 'Show'} score breakdown
+                  </button>
 
-                  {/* Rewards Display */}
-                  {showRewards && (
-                    <motion.div
-                      className="grid grid-cols-3 gap-4"
-                      initial={{ y: 20, opacity: 0 }}
-                      animate={{ y: 0, opacity: 1 }}
-                      transition={{ delay: 4 }}
-                    >
-                      <motion.div 
-                        className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 rounded-xl p-4 border border-yellow-500/30"
-                        whileHover={{ scale: 1.05 }}
-                      >
-                        <div className="text-2xl mb-2">🪙</div>
-                        <div className="text-sm text-yellow-300">Coins</div>
-                        <div className="text-xl font-bold text-white">+{displayedCoins}</div>
-                      </motion.div>
-                      
-                      <motion.div 
-                        className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-xl p-4 border border-purple-500/30"
-                        whileHover={{ scale: 1.05 }}
-                      >
-                        <div className="text-2xl mb-2">💎</div>
-                        <div className="text-sm text-purple-300">Gems</div>
-                        <div className="text-xl font-bold text-white">+{displayedGems}</div>
-                      </motion.div>
-                      
-                      <motion.div 
-                        className="bg-gradient-to-br from-blue-500/20 to-cyan-500/20 rounded-xl p-4 border border-blue-500/30"
-                        whileHover={{ scale: 1.05 }}
-                      >
-                        <div className="text-2xl mb-2">⚡</div>
-                        <div className="text-sm text-blue-300">XP</div>
-                        <div className="text-xl font-bold text-white">+{displayedXP}</div>
-                      </motion.div>
-                    </motion.div>
-                  )}
-
-                  {/* Action Buttons */}
                   <AnimatePresence>
-                    {animationPhase === 'options' && (
+                    {showBreakdown && (
                       <motion.div
-                        initial={{ y: 50, opacity: 0 }}
-                        animate={{ y: 0, opacity: 1 }}
-                        className="flex flex-col sm:flex-row gap-4 pt-6"
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        className="overflow-hidden space-y-1.5 pt-3 mt-3 border-t border-line text-left"
                       >
-                        <motion.button
-                          onClick={onMainMenu}
-                          className="flex-1 px-6 py-4 bg-gradient-to-r from-gray-600 to-gray-700 hover:from-gray-700 hover:to-gray-800 text-white rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-3 shadow-lg"
-                          whileHover={{ scale: 1.02, y: -2 }}
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          <span className="text-xl">🏠</span>
-                          <span>Main Menu</span>
-                        </motion.button>
-
-                        {onRestart && (
-                          <motion.button
-                            onClick={onRestart}
-                            className="flex-1 px-6 py-4 bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-3 shadow-lg"
-                            whileHover={{ scale: 1.02, y: -2 }}
-                            whileTap={{ scale: 0.98 }}
-                          >
-                            <span className="text-xl">🔄</span>
-                            <span>Replay</span>
-                          </motion.button>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-fg-muted">Base score</span>
+                          <span className="text-fg">{scoreBreakdown.baseScore.toLocaleString()}</span>
+                        </div>
+                        <div className="flex justify-between text-xs">
+                          <span className="text-fg-muted">Combo bonus</span>
+                          <span className="text-gold">{scoreBreakdown.comboBonus.toLocaleString()}</span>
+                        </div>
+                        {scoreBreakdown.timeBonus > 0 && (
+                          <div className="flex justify-between text-xs">
+                            <span className="text-fg-muted">Time bonus</span>
+                            <span className="text-good">{scoreBreakdown.timeBonus.toLocaleString()}</span>
+                          </div>
                         )}
-
-                        <motion.button
-                          onClick={onNextLevel}
-                          className="flex-1 px-6 py-4 bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 hover:from-purple-700 hover:via-blue-700 hover:to-cyan-700 text-white rounded-xl font-semibold transition-all duration-200 flex items-center justify-center gap-3 shadow-lg"
-                          whileHover={{ scale: 1.02, y: -2 }}
-                          whileTap={{ scale: 0.98 }}
-                        >
-                          <span className="text-xl">➡️</span>
-                          <span>Next Level</span>
-                        </motion.button>
+                        {scoreBreakdown.perfectionBonus > 0 && (
+                          <div className="flex justify-between text-xs">
+                            <span className="text-fg-muted">Perfection bonus</span>
+                            <span className="text-violet">{scoreBreakdown.perfectionBonus.toLocaleString()}</span>
+                          </div>
+                        )}
                       </motion.div>
                     )}
                   </AnimatePresence>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
+                </div>
 
-          {/* Decorative border glow */}
-          <div className="absolute inset-0 rounded-3xl bg-gradient-to-r from-purple-500/20 via-blue-500/20 to-cyan-500/20 -z-10 blur-xl"></div>
+                {showRewards && (
+                  <div className="grid grid-cols-3 gap-3">
+                    <div className="chip flex-col h-auto py-3 gap-1">
+                      <Coins size={18} className="text-gold" />
+                      <div className="text-xs text-fg-muted">Coins</div>
+                      <div className="text-sm font-bold text-fg">+{displayedCoins}</div>
+                    </div>
+                    <div className="chip flex-col h-auto py-3 gap-1">
+                      <GemIcon size={18} className="text-violet" />
+                      <div className="text-xs text-fg-muted">Gems</div>
+                      <div className="text-sm font-bold text-fg">+{displayedGems}</div>
+                    </div>
+                    <div className="chip flex-col h-auto py-3 gap-1">
+                      <Zap size={18} className="text-good" />
+                      <div className="text-xs text-fg-muted">XP</div>
+                      <div className="text-sm font-bold text-fg">+{displayedXP}</div>
+                    </div>
+                  </div>
+                )}
+
+                <AnimatePresence>
+                  {animationPhase === 'options' && (
+                    <motion.div
+                      initial={{ y: 12, opacity: 0 }}
+                      animate={{ y: 0, opacity: 1 }}
+                      className="flex flex-col sm:flex-row gap-3 pt-2"
+                    >
+                      <button onClick={onNextLevel} className="btn btn-primary flex-1">
+                        <span>Next level</span>
+                      </button>
+
+                      {onRestart && (
+                        <button onClick={onRestart} className="btn btn-secondary flex-1">
+                          <RotateCcw size={18} />
+                          <span>Replay</span>
+                        </button>
+                      )}
+
+                      <button onClick={onMainMenu} className="btn btn-ghost flex-1">
+                        <Home size={18} />
+                        <span>Menu</span>
+                      </button>
+                    </motion.div>
+                  )}
+                </AnimatePresence>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </motion.div>
       </motion.div>
     </AnimatePresence>
   )
-} 
+}

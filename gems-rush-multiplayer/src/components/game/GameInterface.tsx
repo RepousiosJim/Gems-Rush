@@ -2,6 +2,7 @@
 
 import { useState, useRef, useCallback, useMemo, useEffect, ReactElement } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { Home, Settings, Pause, Play, RotateCcw, Lightbulb, ArrowRight } from 'lucide-react'
 import { Gem, GameState } from '@/types/game'
 import EnhancedGem from '@/components/ui/EnhancedGem'
 import ObstacleBlockComponent from '@/components/ui/ObstacleBlock'
@@ -36,14 +37,14 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
   const [combos, setCombos] = useState<number>(0)
   const [showHintMessage, setShowHintMessage] = useState(false)
   const boardRef = useRef<HTMLDivElement>(null)
-  
+
   const { addEffect } = useVisualEffects()
-  
+
   // Use user's auto quality preference, defaulting to locked for stability
-  const { 
-    quality, 
-    shouldAnimate, 
-    shouldShowEffects, 
+  const {
+    quality,
+    shouldAnimate,
+    shouldShowEffects,
     optimizedThrottle,
     optimizedDebounce,
     setManualQuality,
@@ -71,10 +72,10 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
     // Get viewport dimensions
     const vw = typeof window !== 'undefined' ? window.innerWidth : 1200
     const vh = typeof window !== 'undefined' ? window.innerHeight : 800
-    
+
     // Calculate optimal size based on available space and quality
     const maxSize = Math.min(vw * 0.9, vh * 0.6) // Take up to 90% width or 60% height
-    
+
     const sizes = {
       minimal: Math.min(maxSize, 320),
       low: Math.min(maxSize, 380),
@@ -104,7 +105,7 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
   const getAdjacentPositions = useCallback((row: number, col: number) => {
     const positions: { row: number; col: number }[] = []
     const directions = [[-1, 0], [1, 0], [0, -1], [0, 1]]
-    
+
     for (const [dr, dc] of directions) {
       const newRow = row + dr
       const newCol = col + dc
@@ -112,7 +113,7 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
         positions.push({ row: newRow, col: newCol })
       }
     }
-    
+
     return positions
   }, [])
 
@@ -122,14 +123,14 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
       if (matchedPositions.length === 0) return
 
       setCombos(prev => prev + 1)
-      
+
       if (shouldShowEffects) {
         matchedPositions.forEach((pos, index) => {
           if (boardRef.current) {
             const rect = boardRef.current.getBoundingClientRect()
             const x = rect.left + (pos.col * (gemSize + 4)) + gemSize / 2 + 16
             const y = rect.top + (pos.row * (gemSize + 4)) + gemSize / 2 + 16
-            
+
             setTimeout(() => {
               addEffect({
                 type: 'glow',
@@ -138,7 +139,7 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
                 intensity: 1,
                 priority: 'medium'
               })
-              
+
               if (quality === 'ultra') {
                 addEffect({
                   type: 'particle',
@@ -156,7 +157,7 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
           const rect = boardRef.current.getBoundingClientRect()
           const centerX = rect.left + rect.width / 2
           const centerY = rect.top + rect.height / 2
-          
+
           setTimeout(() => {
             addEffect({
               type: 'combo',
@@ -184,13 +185,13 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
       setAdjacentGems([])
     } else {
       const isAdjacent = adjacentGems.some(gem => gem.row === row && gem.col === col)
-      
+
       if (isAdjacent) {
         onMove(selectedGem.row, selectedGem.col, row, col)
         const matchedGems = [selectedGem, { row, col }]
         handleMatchDetection(matchedGems)
       }
-      
+
       setSelectedGem(null)
       setAdjacentGems([])
     }
@@ -203,9 +204,9 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
     const isHintFrom = currentHint?.from.row === row && currentHint?.from.col === col
     const isHintTo = currentHint?.to.row === row && currentHint?.to.col === col
     const isHinted = isHintFrom || isHintTo
-    
+
     return (
-      <div 
+      <div
         key={`${row}-${col}-${gem?.id || 'empty'}`}
         className="relative"
         style={{ width: gemSize, height: gemSize }}
@@ -221,47 +222,42 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
           disabled={disabled}
           size={gemSize < 40 ? 'sm' : gemSize < 60 ? 'md' : 'lg'}
         />
-        
-        {/* Enhanced hint indicators */}
+
+        {/* Hint dots */}
         {isHintFrom && (
           <motion.div
-            className="absolute -top-1 -right-1 w-6 h-6 bg-blue-500 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg"
-            initial={{ scale: 0, rotate: 0 }}
-            animate={{ scale: 1, rotate: 360 }}
-            transition={{ duration: 0.5 }}
-          >
-            1
-          </motion.div>
+            className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-violet shadow-lg"
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ duration: 0.3 }}
+          />
         )}
-        
+
         {isHintTo && (
           <motion.div
-            className="absolute -top-1 -right-1 w-6 h-6 bg-green-500 rounded-full flex items-center justify-center text-white text-xs font-bold shadow-lg"
-            initial={{ scale: 0, rotate: 0 }}
-            animate={{ scale: 1, rotate: -360 }}
-            transition={{ duration: 0.5, delay: 0.2 }}
-          >
-            2
-          </motion.div>
+            className="absolute -top-1 -right-1 h-3 w-3 rounded-full bg-violet shadow-lg"
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ duration: 0.3, delay: 0.15 }}
+          />
         )}
-        
-        {/* Animated hint arrow */}
+
+        {/* Hint arrow */}
         {isHintFrom && currentHint && (
           <motion.div
-            className="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+            className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 pointer-events-none text-violet"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             transition={{ delay: 0.5 }}
           >
             <motion.div
-              className="text-2xl"
-              animate={{ 
+              animate={{
                 x: [0, (currentHint.to.col - currentHint.from.col) * 20, 0],
                 y: [0, (currentHint.to.row - currentHint.from.row) * 20, 0]
               }}
               transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
             >
-              ➡️
+              <ArrowRight size={20} />
             </motion.div>
           </motion.div>
         )}
@@ -269,283 +265,171 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
     )
   }, [selectedGem, adjacentGems, currentHint, disabled, handleGemClick, gemSize])
 
+  const isStageMode = gameState.gameMode === 'stage'
+  const progressPct = Math.round((gameState.score / gameState.targetScore) * 100)
+
   return (
-    <div className="min-h-screen bg-gradient-to-br from-purple-900 via-blue-900 to-indigo-900 relative overflow-hidden">
-      {/* Animated background elements */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none">
-        <motion.div
-          className="absolute top-10 left-10 w-32 h-32 bg-purple-500/10 rounded-full blur-xl"
-          animate={{ 
-            x: [0, 100, 0], 
-            y: [0, -50, 0],
-            scale: [1, 1.2, 1]
-          }}
-          transition={{ duration: 20, repeat: Infinity, ease: "easeInOut" }}
-        />
-        <motion.div
-          className="absolute bottom-10 right-10 w-48 h-48 bg-blue-500/10 rounded-full blur-xl"
-          animate={{ 
-            x: [0, -80, 0], 
-            y: [0, 30, 0],
-            scale: [1, 0.8, 1]
-          }}
-          transition={{ duration: 25, repeat: Infinity, ease: "easeInOut" }}
-        />
-      </div>
-
-      {/* Enhanced Game Header */}
-      <motion.div 
-        className="flex items-center justify-between p-4 lg:p-6 text-white relative z-10"
-        initial={{ y: -50, opacity: 0 }}
+    <div className="min-h-screen bg-ink page-glow relative">
+      {/* Top bar */}
+      <motion.div
+        className="flex h-14 items-center justify-between px-4 md:px-6 relative z-10"
+        initial={{ y: -8, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.25 }}
       >
-        {/* Left side - Menu & Settings */}
-        <div className="flex items-center gap-2 lg:gap-3">
+        <div className="flex items-center gap-2">
           {onShowMenu && (
-            <motion.button
-              onClick={onShowMenu}
-              className="p-2 lg:p-3 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 hover:bg-white/20 transition-all duration-200 shadow-lg"
-              whileHover={shouldAnimate ? { scale: 1.05, y: -2 } : {}}
-              whileTap={shouldAnimate ? { scale: 0.95 } : {}}
-            >
-              <span className="text-lg lg:text-xl">🏠</span>
-            </motion.button>
+            <button onClick={onShowMenu} className="btn btn-icon btn-ghost" aria-label="Menu">
+              <Home size={20} />
+            </button>
           )}
-          
           {onShowSettings && (
-            <motion.button
-              onClick={onShowSettings}
-              className="p-2 lg:p-3 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 hover:bg-white/20 transition-all duration-200 shadow-lg"
-              whileHover={shouldAnimate ? { scale: 1.05, y: -2 } : {}}
-              whileTap={shouldAnimate ? { scale: 0.95 } : {}}
-            >
-              <span className="text-lg lg:text-xl">⚙️</span>
-            </motion.button>
+            <button onClick={onShowSettings} className="btn btn-icon btn-ghost" aria-label="Settings">
+              <Settings size={20} />
+            </button>
           )}
         </div>
 
-        {/* Center - Game Title */}
         <div className="text-center">
-          <motion.h1 
-            className="text-xl lg:text-3xl font-bold bg-gradient-to-r from-purple-300 via-blue-300 to-cyan-300 bg-clip-text text-transparent"
-            animate={{ 
-              backgroundPosition: ['0% 50%', '100% 50%', '0% 50%']
-            }}
-            transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
-          >
-            Gems Rush: Divine Teams
-          </motion.h1>
-          <div className="text-xs lg:text-sm text-purple-300 mt-1">
-            Level {gameState.level} - Divine Realm
+          <div className="text-sm font-semibold text-fg">Gems Rush</div>
+          <div className="text-xs text-fg-muted">
+            {isStageMode && gameState.currentStage
+              ? `Stage ${gameState.currentStage}`
+              : `Level ${gameState.level} · Classic`}
           </div>
         </div>
 
-        {/* Right side - Game Status */}
-        <div className="flex items-center gap-2 lg:gap-3">
+        <div className="flex items-center gap-2">
           {onPause && (
-            <motion.button
-              onClick={onPause}
-              className="p-2 lg:p-3 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 hover:bg-white/20 transition-all duration-200 shadow-lg"
-              whileHover={shouldAnimate ? { scale: 1.05, y: -2 } : {}}
-              whileTap={shouldAnimate ? { scale: 0.95 } : {}}
-            >
-              <span className="text-lg lg:text-xl">
-                {gameState.gameStatus === 'paused' ? '▶️' : '⏸️'}
-              </span>
-            </motion.button>
+            <button onClick={onPause} className="btn btn-icon btn-ghost" aria-label="Pause">
+              {gameState.gameStatus === 'paused' ? <Play size={20} /> : <Pause size={20} />}
+            </button>
           )}
-          
-          <div className="text-center">
-            <div className="text-xs opacity-80">Status</div>
-            <div className="text-sm font-semibold capitalize">
-              {gameState.gameStatus}
-            </div>
-          </div>
+          {gameState.gameStatus !== 'playing' && (
+            <span className="chip capitalize">{gameState.gameStatus}</span>
+          )}
         </div>
       </motion.div>
 
-      {/* Enhanced Hint Message */}
+      {/* Hint toast */}
       <AnimatePresence>
         {showHintMessage && currentHint && (
           <motion.div
-            className="fixed top-20 left-1/2 transform -translate-x-1/2 z-50 px-6 py-3 bg-gradient-to-r from-blue-600 to-cyan-600 text-white rounded-full shadow-xl border border-blue-400/30 backdrop-blur-sm"
-            initial={{ y: -100, opacity: 0 }}
+            className="fixed top-16 left-1/2 -translate-x-1/2 z-50 card px-4 py-2"
+            initial={{ y: -12, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -100, opacity: 0 }}
-            transition={{ type: "spring", stiffness: 300, damping: 30 }}
+            exit={{ y: -12, opacity: 0 }}
+            transition={{ duration: 0.2 }}
           >
-            <div className="flex items-center gap-2 text-sm font-medium">
-              <span className="text-lg">💡</span>
-              <span>Swap the highlighted gems!</span>
-              <motion.span
-                animate={{ rotate: [0, 10, -10, 0] }}
-                transition={{ duration: 1, repeat: Infinity }}
-              >
-                ✨
-              </motion.span>
+            <div className="flex items-center gap-2 text-sm text-fg">
+              <Lightbulb size={16} className="text-violet" />
+              <span>Swap the highlighted gems</span>
             </div>
           </motion.div>
         )}
       </AnimatePresence>
 
-      {/* Enhanced Game Stats Panel */}
-      <motion.div 
-        className="mx-4 lg:mx-6 mb-4 lg:mb-6 p-4 lg:p-6 bg-white/10 backdrop-blur-md rounded-2xl border border-white/20 shadow-2xl"
-        initial={{ y: 50, opacity: 0 }}
+      {/* HUD */}
+      <motion.div
+        className="card mx-auto mt-2 max-w-[560px] p-4"
+        initial={{ y: 8, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.5, delay: 0.2 }}
+        transition={{ duration: 0.25, delay: 0.05 }}
       >
-        <div className={`grid gap-4 lg:gap-6 text-white text-center ${
-          gameState.gameMode === 'stage' ? 'grid-cols-2 lg:grid-cols-5' : 'grid-cols-2 lg:grid-cols-4'
-        }`}>
-          <motion.div 
-            className="space-y-1"
-            whileHover={shouldAnimate ? { scale: 1.05 } : {}}
-          >
-            <div className="text-xs lg:text-sm opacity-80">Score</div>
-            <div className="text-xl lg:text-3xl font-bold text-yellow-400">
-              {gameState.score.toLocaleString()}
-            </div>
+        <div className={cn('grid gap-4 text-center', isStageMode ? 'grid-cols-3 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4')}>
+          <div>
+            <div className="stat-label">Score</div>
+            <div className="stat-value text-gold">{gameState.score.toLocaleString()}</div>
             {gameState.lastMoveScore > 0 && (
-              <motion.div 
-                className="text-xs text-green-400 font-semibold"
-                initial={{ y: 10, opacity: 0 }}
-                animate={{ y: 0, opacity: 1 }}
-                exit={{ y: -10, opacity: 0 }}
-              >
-                +{gameState.lastMoveScore}
-              </motion.div>
+              <div className="text-xs text-good font-semibold">+{gameState.lastMoveScore}</div>
             )}
-          </motion.div>
-          
-          <motion.div 
-            className="space-y-1"
-            whileHover={shouldAnimate ? { scale: 1.05 } : {}}
-          >
-            <div className="text-xs lg:text-sm opacity-80">Target</div>
-            <div className="text-xl lg:text-3xl font-bold text-purple-400">
-              {gameState.targetScore.toLocaleString()}
-            </div>
-            <div className="text-xs opacity-60">
+          </div>
+
+          <div>
+            <div className="stat-label">Target</div>
+            <div className="stat-value text-fg">{gameState.targetScore.toLocaleString()}</div>
+            <div className="text-xs text-fg-dim">
               {Math.max(0, gameState.targetScore - gameState.score).toLocaleString()} to go
             </div>
-          </motion.div>
-          
-          <motion.div 
-            className="space-y-1"
-            whileHover={shouldAnimate ? { scale: 1.05 } : {}}
-          >
-            <div className="text-xs lg:text-sm opacity-80">Moves</div>
-            <div className="text-xl lg:text-3xl font-bold text-blue-400">
-              {gameState.moves}
-            </div>
-            <div className="text-xs opacity-60">
-              {gameState.gameMode === 'stage' && gameState.currentStage 
-                ? `${gameState.moves}/${stageSystem.getStage(gameState.currentStage)?.maxMoves || '∞'}`
-                : 'Divine moves'
-              }
-            </div>
-          </motion.div>
-          
-          <motion.div 
-            className="space-y-1"
-            whileHover={shouldAnimate ? { scale: 1.05 } : {}}
-          >
-            <div className="text-xs lg:text-sm opacity-80">Combo</div>
-            <div className="text-xl lg:text-3xl font-bold text-orange-400">
-              {gameState.comboMultiplier.toFixed(1)}x
-            </div>
-            {combos > 0 && (
-              <div className="text-xs text-orange-300">{combos} chains</div>
-            )}
-          </motion.div>
+          </div>
 
-          {/* Stage-specific: Blocks Destroyed */}
-          {gameState.gameMode === 'stage' && gameState.currentStage && (
-            <motion.div 
-              className="space-y-1"
-              whileHover={shouldAnimate ? { scale: 1.05 } : {}}
-            >
-              <div className="text-xs lg:text-sm opacity-80">Blocks</div>
-              <div className="text-xl lg:text-3xl font-bold text-green-400">
-                {gameState.blocksDestroyed || 0}
+          <div>
+            <div className="stat-label">Moves</div>
+            <div className="stat-value text-fg">
+              {isStageMode && gameState.currentStage
+                ? `${gameState.moves}/${stageSystem.getStage(gameState.currentStage)?.maxMoves ?? '∞'}`
+                : gameState.moves}
+            </div>
+          </div>
+
+          <div>
+            <div className="stat-label">Combo</div>
+            <div className="stat-value text-violet">{gameState.comboMultiplier.toFixed(1)}x</div>
+            {combos > 0 && <div className="text-xs text-fg-dim">{combos} chains</div>}
+          </div>
+
+          {isStageMode && gameState.currentStage && (
+            <div>
+              <div className="stat-label">Blocks</div>
+              <div className="stat-value text-good">{gameState.blocksDestroyed || 0}</div>
+              <div className="text-xs text-fg-dim">
+                / {stageSystem.getStage(gameState.currentStage)?.blocksToBreak || 0}
               </div>
-              <div className="text-xs opacity-60">
-                {gameState.blocksDestroyed || 0}/{stageSystem.getStage(gameState.currentStage)?.blocksToBreak || 0} destroyed
-              </div>
-            </motion.div>
+            </div>
           )}
         </div>
 
-        {/* Enhanced Progress Bar */}
-        <div className="mt-4 lg:mt-6">
-          <div className="flex justify-between text-xs text-white/80 mb-2">
-            <span>Progress to Next Realm</span>
-            <span>{Math.round((gameState.score / gameState.targetScore) * 100)}%</span>
+        <div className="mt-4">
+          <div className="flex justify-between text-xs text-fg-muted mb-1">
+            <span>Target</span>
+            <span>{progressPct}%</span>
           </div>
-          <div className="w-full bg-black/30 rounded-full h-3 overflow-hidden relative">
+          <div className="h-1.5 w-full overflow-hidden rounded-full bg-ink-2">
             <motion.div
-              className="h-full bg-gradient-to-r from-purple-500 via-blue-500 to-cyan-500 rounded-full relative"
+              className="h-full rounded-full bg-violet"
               initial={{ width: 0 }}
-              animate={{ width: `${Math.min((gameState.score / gameState.targetScore) * 100, 100)}%` }}
-              transition={{ duration: 0.8, ease: "easeOut" }}
-            >
-              <motion.div
-                className="absolute inset-0 bg-white/20 rounded-full"
-                animate={{ x: ['-100%', '100%'] }}
-                transition={{ duration: 2, repeat: Infinity, ease: "linear" }}
-              />
-            </motion.div>
+              animate={{ width: `${Math.min(progressPct, 100)}%` }}
+              transition={{ duration: 0.5, ease: 'easeOut' }}
+            />
           </div>
         </div>
       </motion.div>
 
-      {/* Main Game Area */}
-      <div className="flex flex-col items-center space-y-4 lg:space-y-6 px-4 lg:px-6">
-        {/* Enhanced Game Board */}
-        <motion.div 
+      {/* Board + controls */}
+      <div className="flex flex-col items-center gap-4 px-4 py-4">
+        <motion.div
           ref={boardRef}
-          className={cn(
-            "grid grid-cols-8 gap-1 p-4 rounded-2xl border-2 relative shadow-2xl",
-            quality === 'minimal' ? 'bg-gray-800 border-gray-600' : 
-            quality === 'low' ? 'bg-gray-800/90 border-gray-500' :
-            'bg-black/20 backdrop-blur-sm border-white/20'
-          )}
-          style={{
-            width: boardSize,
-            height: boardSize,
-          }}
-          initial={{ scale: 0.9, opacity: 0 }}
+          className="card grid grid-cols-8 gap-1 bg-ink-2 p-3 relative"
+          style={{ width: boardSize, height: boardSize }}
+          initial={{ scale: 0.98, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
-          transition={{ duration: 0.6, delay: 0.4 }}
+          transition={{ duration: 0.25, delay: 0.1 }}
         >
-          {/* Enhanced hint connection line */}
           {currentHint && shouldAnimate && (
             <motion.svg
               className="absolute inset-0 pointer-events-none"
               style={{ width: '100%', height: '100%' }}
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
-              transition={{ delay: 0.7 }}
+              transition={{ delay: 0.4 }}
             >
               <motion.line
                 x1={16 + currentHint.from.col * (gemSize + 4) + gemSize / 2}
                 y1={16 + currentHint.from.row * (gemSize + 4) + gemSize / 2}
                 x2={16 + currentHint.to.col * (gemSize + 4) + gemSize / 2}
                 y2={16 + currentHint.to.row * (gemSize + 4) + gemSize / 2}
-                stroke="rgb(59, 130, 246)"
+                stroke="var(--color-violet)"
                 strokeWidth="3"
                 strokeDasharray="10 5"
                 initial={{ pathLength: 0 }}
                 animate={{ pathLength: 1 }}
-                transition={{ duration: 0.8, ease: "easeInOut" }}
+                transition={{ duration: 0.6, ease: "easeInOut" }}
               />
             </motion.svg>
           )}
-          
+
           {gameState.board.map((row, rowIndex) =>
-            row.map((gem, colIndex) => 
+            row.map((gem, colIndex) =>
               renderGemWithEffects(gem, rowIndex, colIndex)
             )
           )}
@@ -553,7 +437,7 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
           {/* Obstacle blocks overlay */}
           {gameState.obstacleBlocks && gameState.obstacleBlocks.map(block => {
             if (block.isDestroyed) return null
-            
+
             return (
               <div
                 key={block.id}
@@ -574,87 +458,57 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
           })}
         </motion.div>
 
-        {/* Enhanced Game Controls */}
-        <motion.div 
-          className="flex flex-wrap gap-3 lg:gap-4 justify-center"
-          initial={{ y: 50, opacity: 0 }}
+        {/* Controls */}
+        <motion.div
+          className="flex flex-wrap justify-center gap-3"
+          initial={{ y: 8, opacity: 0 }}
           animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.5, delay: 0.6 }}
+          transition={{ duration: 0.25, delay: 0.15 }}
         >
-          <motion.button
-            onClick={onRestart}
-            disabled={disabled}
-            className={cn(
-              "px-6 py-3 lg:px-8 lg:py-4 rounded-xl font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg",
-              disabled 
-                ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                : "bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white hover:shadow-xl"
-            )}
-            whileHover={shouldAnimate && !disabled ? { scale: 1.05, y: -2 } : {}}
-            whileTap={shouldAnimate && !disabled ? { scale: 0.95 } : {}}
-          >
-            <span className="text-lg">🔄</span>
+          <button onClick={onRestart} disabled={disabled} className="btn btn-secondary">
+            <RotateCcw size={18} />
             <span className="hidden sm:inline">Restart</span>
-          </motion.button>
+          </button>
 
           {onShowHint && quality !== 'minimal' && (
-            <motion.button
-              onClick={onShowHint}
-              disabled={disabled}
-              className={cn(
-                "px-6 py-3 lg:px-8 lg:py-4 rounded-xl font-semibold transition-all duration-200 flex items-center gap-2 shadow-lg",
-                disabled 
-                  ? "bg-gray-600 text-gray-400 cursor-not-allowed"
-                  : "bg-gradient-to-r from-green-600 to-emerald-700 hover:from-green-700 hover:to-emerald-800 text-white hover:shadow-xl"
-              )}
-              whileHover={shouldAnimate && !disabled ? { scale: 1.05, y: -2 } : {}}
-              whileTap={shouldAnimate && !disabled ? { scale: 0.95 } : {}}
-            >
-              <span className="text-lg">💡</span>
+            <button onClick={onShowHint} disabled={disabled} className="btn btn-secondary">
+              <Lightbulb size={18} />
               <span className="hidden sm:inline">Hint</span>
-            </motion.button>
+            </button>
           )}
 
           {onNextLevel && gameState.gameStatus === 'completed' && (
-            <motion.button
-              onClick={onNextLevel}
-              className="px-6 py-3 lg:px-8 lg:py-4 bg-gradient-to-r from-purple-600 via-blue-600 to-cyan-600 hover:from-purple-700 hover:via-blue-700 hover:to-cyan-700 text-white rounded-xl font-semibold shadow-lg flex items-center gap-2 hover:shadow-xl transition-all duration-200"
-              whileHover={shouldAnimate ? { scale: 1.05, y: -2 } : {}}
-              whileTap={shouldAnimate ? { scale: 0.95 } : {}}
-              initial={{ scale: 0 }}
-              animate={{ scale: 1 }}
-              transition={{ type: "spring", stiffness: 300, damping: 20 }}
-            >
-              <span className="text-lg">⚡</span>
-              <span>Next Realm</span>
-            </motion.button>
+            <button onClick={onNextLevel} className="btn btn-primary">
+              <span>Next level</span>
+            </button>
           )}
         </motion.div>
 
-        {/* Enhanced Game Status Messages */}
+        {/* Failed state */}
         <AnimatePresence>
           {gameState.gameStatus === 'failed' && (
             <motion.div
-              initial={{ opacity: 0, y: 50, scale: 0.9 }}
-              animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: -50, scale: 0.9 }}
-              className="text-center p-6 lg:p-8 bg-gradient-to-r from-red-500/20 via-orange-500/20 to-yellow-500/20 rounded-2xl border border-red-400/30 backdrop-blur-sm shadow-2xl max-w-md"
+              initial={{ opacity: 0, y: 12 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -12 }}
+              className="card max-w-md p-6 text-center"
             >
-              <motion.div 
-                className="text-5xl lg:text-6xl mb-4"
-                animate={{ scale: [1, 1.1, 1] }}
-                transition={{ duration: 2, repeat: Infinity }}
-              >
-                💫
-              </motion.div>
-              <div className="text-2xl lg:text-3xl font-bold text-red-400 mb-2">
-                Realm Challenge
-              </div>
-              <div className="text-white/80 mb-4">
-                The divine forces were too strong this time
-              </div>
-              <div className="text-lg lg:text-xl text-orange-400 font-semibold">
+              <div className="text-2xl font-bold text-bad mb-2">Out of moves</div>
+              <div className="text-fg-muted mb-4">Not enough score to clear this level</div>
+              <div className="text-lg font-semibold text-fg mb-4">
                 Score: {gameState.score.toLocaleString()} / {gameState.targetScore.toLocaleString()}
+              </div>
+              <div className="flex justify-center gap-3">
+                <button onClick={onRestart} className="btn btn-primary">
+                  <RotateCcw size={18} />
+                  <span>Restart</span>
+                </button>
+                {onShowMenu && (
+                  <button onClick={onShowMenu} className="btn btn-secondary">
+                    <Home size={18} />
+                    <span>Menu</span>
+                  </button>
+                )}
               </div>
             </motion.div>
           )}
@@ -681,33 +535,25 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
           coins: Math.floor(gameState.score / 10),
           gems: Math.max(1, Math.floor(gameState.score / 100)),
           xp: Math.floor(gameState.score / 5),
-          stars: gameState.score >= gameState.targetScore * 2.5 ? 3 : 
+          stars: gameState.score >= gameState.targetScore * 2.5 ? 3 :
                  gameState.score >= gameState.targetScore * 1.8 ? 2 : 1
         }}
       />
 
       {/* Performance indicator (debug) */}
       {process.env.NODE_ENV === 'development' && (
-        <div className="fixed bottom-4 left-4 space-y-2">
-          <div className="text-xs text-white/60 bg-black/20 px-2 py-1 rounded">
-            Quality: {quality} | Board: {boardSize}px | Gem: {gemSize}px
-          </div>
-          <div className="text-xs text-white/60 bg-black/20 px-2 py-1 rounded">
-            Score: {gameState.score.toLocaleString()} / Target: {gameState.targetScore.toLocaleString()}
-          </div>
-          <div className="text-xs text-white/60 bg-black/20 px-2 py-1 rounded">
-            Status: {gameState.gameStatus}
-          </div>
+        <div className="fixed bottom-4 left-4 hidden flex-col gap-1.5 sm:flex">
+          <div className="chip">Quality: {quality} · Board: {boardSize}px · Gem: {gemSize}px</div>
+          <div className="chip">Score: {gameState.score.toLocaleString()} / Target: {gameState.targetScore.toLocaleString()}</div>
+          <div className="chip">Status: {gameState.gameStatus}</div>
           <button
             onClick={() => {
-              // Debug function to test win condition
-              console.log('🧪 Debug: Triggering win condition manually')
-              // This is a hack for testing - we'll trigger it via the parent component
+              console.log('Debug: Triggering win condition manually')
               window.dispatchEvent(new CustomEvent('debug-win-test'))
             }}
-            className="bg-yellow-600 hover:bg-yellow-700 text-white px-2 py-1 rounded text-xs"
+            className="btn btn-secondary h-8 px-3 text-xs"
           >
-            🧪 Test Win
+            Test Win
           </button>
         </div>
       )}
