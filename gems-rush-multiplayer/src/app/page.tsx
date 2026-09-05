@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef } from 'react'
 import { GameEngine } from '@/lib/game/GameEngine'
 import { GameState } from '@/types/game'
-import { settingsManager } from '@/lib/settings/SettingsManager'
 import { energyManager } from '@/lib/game/EnergySystem'
 import { dynamicContentManager } from '@/lib/game/DynamicContentSystem'
 import { tutorialManager } from '@/lib/game/ProgressiveTutorialSystem'
@@ -19,6 +18,8 @@ import SettingsModal from '@/components/ui/SettingsModal'
 import StatisticsModal from '@/components/ui/StatisticsModal'
 import { GameGuideModal, CreditsModal } from '@/components/ui/Modal'
 import { Gem } from 'lucide-react'
+import { MotionConfig } from 'framer-motion'
+import { useSettings } from '@/lib/settings'
 
 function formatEventTimeLeft(endTime: number): string {
   const remaining = endTime - Date.now()
@@ -89,6 +90,7 @@ interface UserStatsType {
 }
 
 export default function HomePage() {
+  const [settings] = useSettings()
   const [appState, setAppState] = useState<AppState>('loading')
   const [modalState, setModalState] = useState<ModalState>(null)
   const [gameEngine, setGameEngine] = useState<GameEngine | null>(null)
@@ -126,9 +128,7 @@ export default function HomePage() {
       lastStepTime: Date.now()
     }
   })
-  const [soundEnabled, setSoundEnabled] = useState(true)
-  
-  const gameEngineRef = useRef<GameEngine | null>(null)
+    const gameEngineRef = useRef<GameEngine | null>(null)
 
   // Add hint state management
   const [currentHint, setCurrentHint] = useState<{ from: { row: number; col: number }; to: { row: number; col: number } } | null>(null)
@@ -196,9 +196,6 @@ export default function HomePage() {
   useEffect(() => {
     const initializeApp = async () => {
       try {
-        // Initialize settings manager
-        await settingsManager.initialize()
-        
         // Load user stats from localStorage
         const savedStats = localStorage.getItem('gems-rush-user-stats')
         if (savedStats) {
@@ -286,12 +283,6 @@ export default function HomePage() {
           setShowOnboarding(true)
         }
 
-        // Load sound preference
-        const soundPref = localStorage.getItem('gems-rush-sound-enabled')
-        if (soundPref !== null) {
-          setSoundEnabled(JSON.parse(soundPref))
-        }
-
         setIsInitialized(true)
         setAppState('menu')
       } catch (error) {
@@ -344,13 +335,6 @@ export default function HomePage() {
       localStorage.setItem('gems-rush-user-stats', JSON.stringify(userStats))
     }
   }, [userStats, isInitialized])
-
-  // Save sound preference when it changes
-  useEffect(() => {
-    if (isInitialized) {
-      localStorage.setItem('gems-rush-sound-enabled', JSON.stringify(soundEnabled))
-    }
-  }, [soundEnabled, isInitialized])
 
   const setupGameEngineListeners = (engine: GameEngine) => {
     engine.on('game:score-updated', (score: number, _change: number) => {
@@ -933,10 +917,6 @@ export default function HomePage() {
     setShowOnboarding(false)
   }
 
-  const handleToggleSound = () => {
-    setSoundEnabled(!soundEnabled)
-  }
-
   const handleQuickPlay = () => {
     handleModeSelect('normal')
   }
@@ -1094,125 +1074,129 @@ export default function HomePage() {
     }
   }
 
-  // Show loading screen
-  if (!isInitialized || appState === 'loading') {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-ink">
-        <div className="flex flex-col items-center gap-4">
-          <Gem className="h-10 w-10 text-gold" />
-          <div className="text-fg text-lg font-semibold">Gems Rush</div>
-          <div className="h-0.5 w-40 overflow-hidden rounded-full bg-ink-2">
-            <div className="h-full w-1/3 animate-pulse rounded-full bg-violet" />
+  const screen = (() => {
+    // Show loading screen
+    if (!isInitialized || appState === 'loading') {
+      return (
+        <div className="flex min-h-screen items-center justify-center bg-ink">
+          <div className="flex flex-col items-center gap-4">
+            <Gem className="h-10 w-10 text-gold" />
+            <div className="text-fg text-lg font-semibold">Gems Rush</div>
+            <div className="h-0.5 w-40 overflow-hidden rounded-full bg-ink-2">
+              <div className="h-full w-1/3 animate-pulse rounded-full bg-violet" />
+            </div>
           </div>
         </div>
-      </div>
-    )
-  }
+      )
+    }
 
-  // Game interface
-  if (appState === 'game' && gameEngine && gameState) {
-    return (
-      <>
-        <GameInterface
-          gameState={gameState}
-          onMove={handleMove}
-          onRestart={handleRestart}
-          onNextLevel={handleNextLevel}
-          onPause={handlePause}
-          onShowMenu={handleShowMenu}
-          onShowSettings={() => setModalState('settings')}
-          onShowHint={handleShowHint}
-          currentHint={currentHint}
-        />
+    // Game interface
+    if (appState === 'game' && gameEngine && gameState) {
+      return (
+        <>
+          <GameInterface
+            gameState={gameState}
+            onMove={handleMove}
+            onRestart={handleRestart}
+            onNextLevel={handleNextLevel}
+            onPause={handlePause}
+            onShowMenu={handleShowMenu}
+            onShowSettings={() => setModalState('settings')}
+            onShowHint={settings.hints ? handleShowHint : undefined}
+            currentHint={currentHint}
+          />
         
-        {/* Game modals */}
-        <SettingsModal isOpen={modalState === 'settings'} onClose={closeModal} />
-        <StatisticsModal isOpen={modalState === 'statistics'} onClose={closeModal} />
-      </>
-    )
-  }
+          {/* Game modals */}
+          <SettingsModal isOpen={modalState === 'settings'} onClose={closeModal} />
+          <StatisticsModal isOpen={modalState === 'statistics'} onClose={closeModal} />
+        </>
+      )
+    }
 
-  // Time Rush mode interface
-  if (appState === 'timeRush' && gameEngine) {
-    return (
-      <>
-        <TimeRushMode
-          gameEngine={gameEngine}
-          onGameEnd={handleTimeRushEnd}
-          onPause={() => console.log('Pause not supported in Time Rush')}
-          onShowMenu={handleShowMenu}
-        />
+    // Time Rush mode interface
+    if (appState === 'timeRush' && gameEngine) {
+      return (
+        <>
+          <TimeRushMode
+            gameEngine={gameEngine}
+            onGameEnd={handleTimeRushEnd}
+            onPause={() => console.log('Pause not supported in Time Rush')}
+            onShowMenu={handleShowMenu}
+          />
         
-        {/* Time Rush modals */}
-        <SettingsModal isOpen={modalState === 'settings'} onClose={closeModal} />
-      </>
-    )
-  }
+          {/* Time Rush modals */}
+          <SettingsModal isOpen={modalState === 'settings'} onClose={closeModal} />
+        </>
+      )
+    }
 
-  // Stage selection screen
-  if (appState === 'stageSelect') {
-    return (
-      <StageSelectScreen
-        onStageSelect={handleStageSelect}
-        onBackToMenu={() => setAppState('menu')}
-      />
-    )
-  }
-
-  // Main menu
-  if (appState === 'menu') {
-    const dailyEvent = userStats.currentDailyEvent
-      ? {
-          name: userStats.currentDailyEvent.name,
-          description: userStats.currentDailyEvent.description,
-          timeLeft: formatEventTimeLeft(userStats.currentDailyEvent.endTime),
-        }
-      : null
-
-    return (
-      <>
-        <EnhancedMainMenu
-          onModeSelect={handleModeSelect}
-          onShowSettings={() => setModalState('settings')}
-          onShowGuide={() => setModalState('guide')}
-          onShowCredits={() => setModalState('credits')}
-          onShowStats={() => setModalState('statistics')}
-          onShowDashboard={handleShowDashboard}
-          userLevel={userStats.level}
-          userXP={userStats.xp}
-          userCoins={userStats.coins}
-          userGems={userStats.gems}
-          dailyChallengeCompleted={userStats.dailyChallengeCompleted}
-          streak={userStats.streak}
-          energy={userStats.energy}
-          maxEnergy={userStats.maxEnergy}
-          onRefillEnergy={handleRefillEnergy}
-          dailyEvent={dailyEvent}
+    // Stage selection screen
+    if (appState === 'stageSelect') {
+      return (
+        <StageSelectScreen
+          onStageSelect={handleStageSelect}
+          onBackToMenu={() => setAppState('menu')}
         />
+      )
+    }
 
-        {/* User onboarding */}
-        <UserOnboarding
-          isVisible={showOnboarding}
-          onComplete={handleOnboardingComplete}
-          onSkip={handleOnboardingSkip}
-        />
+    // Main menu
+    if (appState === 'menu') {
+      const dailyEvent = userStats.currentDailyEvent
+        ? {
+            name: userStats.currentDailyEvent.name,
+            description: userStats.currentDailyEvent.description,
+            timeLeft: formatEventTimeLeft(userStats.currentDailyEvent.endTime),
+          }
+        : null
 
-        {/* User Dashboard */}
-        <UserDashboard
-          isVisible={modalState === 'dashboard'}
-          onClose={closeModal}
-          userStats={userStats}
-          onUpdateProfile={handleUpdateProfile}
-        />
+      return (
+        <>
+          <EnhancedMainMenu
+            onModeSelect={handleModeSelect}
+            onShowSettings={() => setModalState('settings')}
+            onShowGuide={() => setModalState('guide')}
+            onShowCredits={() => setModalState('credits')}
+            onShowStats={() => setModalState('statistics')}
+            onShowDashboard={handleShowDashboard}
+            userLevel={userStats.level}
+            userXP={userStats.xp}
+            userCoins={userStats.coins}
+            userGems={userStats.gems}
+            dailyChallengeCompleted={userStats.dailyChallengeCompleted}
+            streak={userStats.streak}
+            energy={userStats.energy}
+            maxEnergy={userStats.maxEnergy}
+            onRefillEnergy={handleRefillEnergy}
+            dailyEvent={dailyEvent}
+          />
+
+          {/* User onboarding */}
+          <UserOnboarding
+            isVisible={showOnboarding}
+            onComplete={handleOnboardingComplete}
+            onSkip={handleOnboardingSkip}
+          />
+
+          {/* User Dashboard */}
+          <UserDashboard
+            isVisible={modalState === 'dashboard'}
+            onClose={closeModal}
+            userStats={userStats}
+            onUpdateProfile={handleUpdateProfile}
+          />
         
-        {/* Modals */}
-        <SettingsModal isOpen={modalState === 'settings'} onClose={closeModal} />
-        <StatisticsModal isOpen={modalState === 'statistics'} onClose={closeModal} />
-        <GameGuideModal isOpen={modalState === 'guide'} onClose={closeModal} />
-        <CreditsModal isOpen={modalState === 'credits'} onClose={closeModal} />
-      </>
-    )
-  }
+          {/* Modals */}
+          <SettingsModal isOpen={modalState === 'settings'} onClose={closeModal} />
+          <StatisticsModal isOpen={modalState === 'statistics'} onClose={closeModal} />
+          <GameGuideModal isOpen={modalState === 'guide'} onClose={closeModal} />
+          <CreditsModal isOpen={modalState === 'credits'} onClose={closeModal} />
+        </>
+      )
+    }
 
-  return null
+    return null
+  })()
+
+  return <MotionConfig reducedMotion={settings.animations ? 'user' : 'always'}>{screen}</MotionConfig>
 }

@@ -52,6 +52,7 @@ const throttle = <T extends (...args: any[]) => any>(func: T, limit: number): T 
 
 // Check for reduced motion preference
 const prefersReducedMotion = () => {
+  if (document.documentElement.classList.contains('reduce-motion')) return true
   return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 }
 
