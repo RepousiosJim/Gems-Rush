@@ -49,7 +49,7 @@ const onboardingSteps: OnboardingStep[] = [
   {
     id: 'combos',
     title: 'Power Combos',
-    description: 'Create L-shapes and T-shapes for bomb gems, match 4 in a row for lightning gems, or match 5 for rainbow gems that clear entire colors.',
+    description: 'Match 4 in a row for a lightning gem, 5 for a rainbow gem, or 6 or more for a bomb gem. Swap a power-up with a neighbour to set it off.',
     icon: Zap,
   },
   {
