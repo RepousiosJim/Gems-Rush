@@ -1,7 +1,7 @@
 'use client'
 
-import { useRef, useState } from 'react'
-import { animate, motion, useMotionValue, Variants } from 'framer-motion'
+import { createContext, useContext, useEffect, useMemo, useRef, useState } from 'react'
+import { animate, motion, MotionValue, useMotionValue, useTransform, Variants } from 'framer-motion'
 import { Gem } from '@/types/game'
 import { cn } from '@/lib/utils'
 import GemIcon from './GemIcon'
@@ -33,6 +33,50 @@ const SWIPE_THRESHOLD_PX = 16
 
 const SNAP_SPRING = { type: 'spring', stiffness: 600, damping: 35 } as const
 
+const GLIDE = { duration: 0.12, ease: 'easeOut' } as const
+
+// One drag offset per board: the dragged gem moves by it and the neighbour it heads toward moves the opposite way
+interface SwapDrag {
+  x: MotionValue<number>
+  y: MotionValue<number>
+  origin: MotionValue<string>
+  boardSize: number
+}
+
+const SwapDragContext = createContext<SwapDrag | null>(null)
+
+export const SwapDragProvider = SwapDragContext.Provider
+
+// The board resets the drag when its gems change, so a valid swap lands without a jump
+export function useSwapDrag(board: unknown[]): SwapDrag {
+  const x = useMotionValue(0)
+  const y = useMotionValue(0)
+  const origin = useMotionValue('')
+  useEffect(() => {
+    x.set(0)
+    y.set(0)
+    origin.set('')
+  }, [board, x, y, origin])
+  return useMemo(() => ({ x, y, origin, boardSize: board.length }), [x, y, origin, board.length])
+}
+
+const offsetFor = (row: number, col: number, origin: string, x: number, y: number) => {
+  if (!origin) return { x: 0, y: 0 }
+  const [oRow, oCol] = origin.split(',').map(Number)
+  if (row === oRow && col === oCol) return { x, y }
+  if (row === oRow + Math.sign(y) && col === oCol + Math.sign(x)) return { x: -x, y: -y }
+  return { x: 0, y: 0 }
+}
+
+// Distance between neighbouring cell centres, measured from the gem's grid cell
+const cellPitch = (cell: Element) => {
+  const r = cell.getBoundingClientRect()
+  const sibling = [cell.nextElementSibling, cell.previousElementSibling]
+    .map(el => el?.getBoundingClientRect())
+    .find(b => b && Math.abs(b.top - r.top) < 1 && Math.abs(b.width - r.width) < 1)
+  return sibling ? Math.abs(sibling.left - r.left) : r.width
+}
+
 const gemVariants: Variants = {
   default: { scale: 1, y: 0, opacity: 1, filter: 'brightness(1)' },
   selected: {
@@ -54,6 +98,8 @@ const gemVariants: Variants = {
 
 export default function EnhancedGem({
   gem,
+  row,
+  col,
   isSelected = false,
   isAdjacent = false,
   isHinted = false,
@@ -64,8 +110,9 @@ export default function EnhancedGem({
   size = 'md'
 }: EnhancedGemProps) {
   const drag = useRef<{ x: number; y: number; reach: number; active: boolean; swiped: boolean } | null>(null)
-  const offsetX = useMotionValue(0)
-  const offsetY = useMotionValue(0)
+  const shared = useContext(SwapDragContext)!
+  const offsetX = useTransform(() => offsetFor(row, col, shared.origin.get(), shared.x.get(), shared.y.get()).x)
+  const offsetY = useTransform(() => offsetFor(row, col, shared.origin.get(), shared.x.get(), shared.y.get()).y)
   const [dragging, setDragging] = useState(false)
 
   if (!gem) {
@@ -80,9 +127,12 @@ export default function EnhancedGem({
         ? 'hinted'
         : 'default'
 
+  const key = `${row},${col}`
+
   const snapBack = () => {
-    animate(offsetX, 0, SNAP_SPRING)
-    animate(offsetY, 0, SNAP_SPRING)
+    if (shared.origin.get() !== key) return
+    animate(shared.x, 0, SNAP_SPRING)
+    animate(shared.y, 0, { ...SNAP_SPRING, onComplete: () => shared.origin.set('') })
   }
 
   const endDrag = (e: React.PointerEvent) => {
@@ -90,27 +140,35 @@ export default function EnhancedGem({
     if (!start?.active) return
     start.active = false
     setDragging(false)
-    const dx = offsetX.get()
-    const dy = offsetY.get()
+    const dx = shared.x.get()
+    const dy = shared.y.get()
     if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_THRESHOLD_PX || e.type === 'pointercancel') {
       snapBack()
       return
     }
     start.swiped = true
     const horizontal = Math.abs(dx) > Math.abs(dy)
-    // Glide into the neighbour's cell; a valid swap remounts this cell, an invalid one slides back
-    animate(horizontal ? offsetX : offsetY, Math.sign(horizontal ? dx : dy) * start.reach, SNAP_SPRING)
-    setTimeout(snapBack, 220)
-    if (horizontal) onSwipe!(0, Math.sign(dx))
-    else onSwipe!(Math.sign(dy), 0)
+    // Both gems glide into each other's cells, then the move is made: a valid swap resets
+    // the drag as the board changes, an invalid one slides back
+    animate(horizontal ? shared.x : shared.y, Math.sign(horizontal ? dx : dy) * start.reach, {
+      ...GLIDE,
+      onComplete: () => {
+        if (horizontal) onSwipe!(0, Math.sign(dx))
+        else onSwipe!(Math.sign(dy), 0)
+        setTimeout(snapBack, 120)
+      }
+    })
   }
 
   return (
     <motion.button
       onPointerDown={e => {
         if (disabled || !onSwipe) return
-        drag.current = { x: e.clientX, y: e.clientY, reach: e.currentTarget.offsetWidth, active: true, swiped: false }
+        drag.current = { x: e.clientX, y: e.clientY, reach: cellPitch(e.currentTarget.parentElement!), active: true, swiped: false }
         e.currentTarget.setPointerCapture(e.pointerId)
+        shared.x.set(0)
+        shared.y.set(0)
+        shared.origin.set(key)
         setDragging(true)
       }}
       onPointerMove={e => {
@@ -120,13 +178,12 @@ export default function EnhancedGem({
         const dy = e.clientY - start.y
         // Follow the finger along the dominant axis, at most one cell
         const clamp = (v: number) => Math.max(-start.reach, Math.min(start.reach, v))
-        if (Math.abs(dx) > Math.abs(dy)) {
-          offsetX.set(clamp(dx))
-          offsetY.set(0)
-        } else {
-          offsetX.set(0)
-          offsetY.set(clamp(dy))
-        }
+        // Stay inside the board: no pull toward a missing neighbour
+        const horizontal = Math.abs(dx) > Math.abs(dy)
+        const allowed = (d: number) => (horizontal ? col + Math.sign(d) : row + Math.sign(d)) >= 0 &&
+          (horizontal ? col + Math.sign(d) : row + Math.sign(d)) < shared.boardSize
+        shared.x.set(horizontal && allowed(dx) ? clamp(dx) : 0)
+        shared.y.set(!horizontal && allowed(dy) ? clamp(dy) : 0)
       }}
       onPointerUp={endDrag}
       onPointerCancel={endDrag}

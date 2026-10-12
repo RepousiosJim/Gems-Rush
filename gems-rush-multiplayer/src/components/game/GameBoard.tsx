@@ -3,7 +3,7 @@
 import { useState, useCallback } from 'react'
 import { motion } from 'framer-motion'
 import { GameState } from '@/types/game'
-import EnhancedGem from '@/components/ui/EnhancedGem'
+import EnhancedGem, { SwapDragProvider, useSwapDrag } from '@/components/ui/EnhancedGem'
 
 const GRID = 8
 const GAP = 3
@@ -29,6 +29,7 @@ export default function GameBoard({
   currentHint
 }: GameBoardProps) {
   const [selectedGem, setSelectedGem] = useState<{ row: number; col: number } | null>(null)
+  const swapDrag = useSwapDrag(gameState.board)
 
   const gemSize = Math.floor((size - PADDING * 2 - GAP * (GRID - 1)) / GRID)
   // The gem slot must fit inside its cell
@@ -104,6 +105,7 @@ export default function GameBoard({
           </motion.svg>
         )}
 
+        <SwapDragProvider value={swapDrag}>
         {gameState.board.map((row, rowIndex) =>
           row.map((gem, colIndex) => {
             const isHinted =
@@ -130,6 +132,7 @@ export default function GameBoard({
             )
           })
         )}
+        </SwapDragProvider>
       </div>
     </div>
   )

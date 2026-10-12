@@ -4,7 +4,7 @@ import { useState, useRef, useCallback, useMemo, useEffect, ReactElement } from 
 import { motion, AnimatePresence } from 'framer-motion'
 import { Home, Settings, Pause, Play, RotateCcw, Lightbulb, ArrowRight, Check } from 'lucide-react'
 import { Gem, GameState } from '@/types/game'
-import EnhancedGem from '@/components/ui/EnhancedGem'
+import EnhancedGem, { SwapDragProvider, useSwapDrag } from '@/components/ui/EnhancedGem'
 import ObstacleBlockComponent from '@/components/ui/ObstacleBlock'
 import WinScreen from '@/components/ui/WinScreen'
 import LoseScreen from '@/components/ui/LoseScreen'
@@ -41,6 +41,7 @@ const URGENT_MOVES = 5
 // Separate component to avoid provider nesting issues
 const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPause, onShowMenu, onShowSettings, onShowHint, currentHint, rewards, bonusScore, onSkipBonus, disabled }: GameInterfaceProps): ReactElement => {
   const [selectedGem, setSelectedGem] = useState<{ row: number; col: number } | null>(null)
+  const swapDrag = useSwapDrag(gameState.board)
   const [adjacentGems, setAdjacentGems] = useState<{ row: number; col: number }[]>([])
   const [chains, setChains] = useState<number>(0)
   const [showHintMessage, setShowHintMessage] = useState(false)
@@ -489,11 +490,13 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
             </motion.svg>
           )}
 
-          {gameState.board.map((row, rowIndex) =>
-            row.map((gem, colIndex) =>
-              renderGemWithEffects(gem, rowIndex, colIndex)
-            )
-          )}
+          <SwapDragProvider value={swapDrag}>
+            {gameState.board.map((row, rowIndex) =>
+              row.map((gem, colIndex) =>
+                renderGemWithEffects(gem, rowIndex, colIndex)
+              )
+            )}
+          </SwapDragProvider>
 
           {/* Obstacle blocks overlay */}
           {gameState.obstacleBlocks && gameState.obstacleBlocks.map(block => {
