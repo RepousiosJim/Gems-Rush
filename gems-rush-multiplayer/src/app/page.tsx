@@ -19,6 +19,7 @@ import { GameGuideModal, CreditsModal } from '@/components/ui/Modal'
 import { Gem } from 'lucide-react'
 import { MotionConfig } from 'framer-motion'
 import { useSettings } from '@/lib/settings'
+import { levelForXp } from '@/lib/game/leveling'
 
 function formatEventTimeLeft(endTime: number): string {
   const remaining = endTime - Date.now()
@@ -27,10 +28,6 @@ function formatEventTimeLeft(endTime: number): string {
   const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60))
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
 }
-
-const XP_PER_LEVEL = 100
-
-const calculateLevelUp = (xp: number) => Math.floor(xp / XP_PER_LEVEL) + 1
 
 interface Rewards {
   coins: number
@@ -115,7 +112,7 @@ function addRewards(stats: UserStatsType, rewards: Rewards): UserStatsType {
     coins: stats.coins + rewards.coins,
     gems: stats.gems + rewards.gems,
     xp,
-    level: calculateLevelUp(xp)
+    level: levelForXp(xp)
   }
 }
 
@@ -248,6 +245,7 @@ export default function HomePage() {
             ...parsedStats,
             dailyChallengeCompleted: lastDaily === dateKey(),
             streak: lastDaily === dateKey() || lastDaily === dateKey(1) ? parsedStats.streak : 0,
+            level: levelForXp(parsedStats.xp ?? 0),
             energy: regenerated.energy,
             maxEnergy: validMaxEnergy,
             lastEnergyUpdate: regenerated.lastUpdate,

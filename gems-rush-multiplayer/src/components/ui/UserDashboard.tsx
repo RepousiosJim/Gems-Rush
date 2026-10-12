@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import { xpForLevel } from '@/lib/game/leveling'
 import {
   Trophy,
   Star,
@@ -92,12 +93,8 @@ export default function UserDashboard({
     setIsEditing(false)
   }
 
-  const xpToNextLevel = (level: number) => {
-    return level * 1000
-  }
-
-  const currentLevelXP = userStats.xp % xpToNextLevel(userStats.level)
-  const xpNeeded = xpToNextLevel(userStats.level)
+  const currentLevelXP = userStats.xp - xpForLevel(userStats.level)
+  const xpNeeded = xpForLevel(userStats.level + 1) - xpForLevel(userStats.level)
   const progressPercentage = (currentLevelXP / xpNeeded) * 100
 
   const mockAchievements: Achievement[] = [
