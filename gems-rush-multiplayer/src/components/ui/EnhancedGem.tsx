@@ -1,7 +1,7 @@
 'use client'
 
-import { useRef } from 'react'
-import { motion, Variants } from 'framer-motion'
+import { useRef, useState } from 'react'
+import { animate, motion, useMotionValue, Variants } from 'framer-motion'
 import { Gem } from '@/types/game'
 import { cn } from '@/lib/utils'
 import GemIcon from './GemIcon'
@@ -30,6 +30,8 @@ const SLOT_CLASSES = {
 const ICON_SIZES = { sm: 36, md: 43, lg: 58 }
 
 const SWIPE_THRESHOLD_PX = 16
+
+const SNAP_SPRING = { type: 'spring', stiffness: 600, damping: 35 } as const
 
 const gemVariants: Variants = {
   default: { scale: 1, y: 0, opacity: 1, filter: 'brightness(1)' },
@@ -61,7 +63,10 @@ export default function EnhancedGem({
   disabled = false,
   size = 'md'
 }: EnhancedGemProps) {
-  const drag = useRef<{ x: number; y: number; swiped: boolean } | null>(null)
+  const drag = useRef<{ x: number; y: number; reach: number; active: boolean; swiped: boolean } | null>(null)
+  const offsetX = useMotionValue(0)
+  const offsetY = useMotionValue(0)
+  const [dragging, setDragging] = useState(false)
 
   if (!gem) {
     return <div className={cn('rounded-lg bg-ink/40', SLOT_CLASSES[size])} />
@@ -75,23 +80,56 @@ export default function EnhancedGem({
         ? 'hinted'
         : 'default'
 
+  const snapBack = () => {
+    animate(offsetX, 0, SNAP_SPRING)
+    animate(offsetY, 0, SNAP_SPRING)
+  }
+
+  const endDrag = (e: React.PointerEvent) => {
+    const start = drag.current
+    if (!start?.active) return
+    start.active = false
+    setDragging(false)
+    const dx = offsetX.get()
+    const dy = offsetY.get()
+    if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_THRESHOLD_PX || e.type === 'pointercancel') {
+      snapBack()
+      return
+    }
+    start.swiped = true
+    const horizontal = Math.abs(dx) > Math.abs(dy)
+    // Glide into the neighbour's cell; a valid swap remounts this cell, an invalid one slides back
+    animate(horizontal ? offsetX : offsetY, Math.sign(horizontal ? dx : dy) * start.reach, SNAP_SPRING)
+    setTimeout(snapBack, 220)
+    if (horizontal) onSwipe!(0, Math.sign(dx))
+    else onSwipe!(Math.sign(dy), 0)
+  }
+
   return (
     <motion.button
       onPointerDown={e => {
         if (disabled || !onSwipe) return
-        drag.current = { x: e.clientX, y: e.clientY, swiped: false }
+        drag.current = { x: e.clientX, y: e.clientY, reach: e.currentTarget.offsetWidth, active: true, swiped: false }
         e.currentTarget.setPointerCapture(e.pointerId)
+        setDragging(true)
       }}
       onPointerMove={e => {
         const start = drag.current
-        if (!start || start.swiped) return
+        if (!start?.active) return
         const dx = e.clientX - start.x
         const dy = e.clientY - start.y
-        if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_THRESHOLD_PX) return
-        start.swiped = true
-        if (Math.abs(dx) > Math.abs(dy)) onSwipe!(0, Math.sign(dx))
-        else onSwipe!(Math.sign(dy), 0)
+        // Follow the finger along the dominant axis, at most one cell
+        const clamp = (v: number) => Math.max(-start.reach, Math.min(start.reach, v))
+        if (Math.abs(dx) > Math.abs(dy)) {
+          offsetX.set(clamp(dx))
+          offsetY.set(0)
+        } else {
+          offsetX.set(0)
+          offsetY.set(clamp(dy))
+        }
       }}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
       onClick={() => {
         // The click that ends a swipe is not a tap
         const swiped = drag.current?.swiped
@@ -101,6 +139,7 @@ export default function EnhancedGem({
       disabled={disabled}
       className={cn(
         'relative flex touch-none select-none items-center justify-center rounded-lg bg-ink/40',
+        dragging && 'z-20',
         SLOT_CLASSES[size],
         isSelected && 'bg-gold/15 ring-2 ring-gold shadow-[0_0_14px_rgba(245,196,81,0.55)]',
         isHinted && !isSelected && 'bg-violet/15 ring-2 ring-violet',
@@ -116,8 +155,10 @@ export default function EnhancedGem({
           transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
         />
       )}
-      <motion.span className="flex" variants={gemVariants} animate={variant}>
-        <GemIcon type={gem.type} size={ICON_SIZES[size]} powerUp={gem.powerUpType} />
+      <motion.span className="flex" style={{ x: offsetX, y: offsetY }}>
+        <motion.span className="flex" variants={gemVariants} animate={variant}>
+          <GemIcon type={gem.type} size={ICON_SIZES[size]} powerUp={gem.powerUpType} />
+        </motion.span>
       </motion.span>
     </motion.button>
   )
