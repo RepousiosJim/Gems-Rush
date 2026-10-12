@@ -399,7 +399,23 @@ export default function HomePage() {
     })
   }
 
-  const abandonRound = () => settleRound(gameStateRef.current?.score ?? 0, false)
+  // A Time Rush round has no gameStateRef; its score lives in the engine
+  const abandonRound = () => {
+    const engineState = gameEngineRef.current?.getGameState()
+    const score = gameStateRef.current?.score ?? engineState?.score ?? 0
+    const timeRush = engineState?.gameMode === 'timeAttack'
+    settleRound(
+      score,
+      false,
+      NO_REWARDS,
+      timeRush
+        ? prev => ({
+            bestTimeRushScore: Math.max(prev.bestTimeRushScore, score),
+            timeRushGamesPlayed: prev.timeRushGamesPlayed + 1
+          })
+        : undefined
+    )
+  }
 
   const winRound = (state: GameState) => {
     let rewards: Rewards & { stars: number }
