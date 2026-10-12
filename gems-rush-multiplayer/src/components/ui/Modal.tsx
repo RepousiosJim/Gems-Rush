@@ -268,17 +268,6 @@ export function CreditsModal({ isOpen, onClose }: { isOpen: boolean; onClose: ()
         ['Game Engine', 'Custom Match-3 Engine'],
       ],
     },
-    {
-      title: 'Technology Stack',
-      icon: Sparkles,
-      rows: [
-        ['Frontend', 'Next.js, React, TypeScript'],
-        ['Styling', 'Tailwind CSS'],
-        ['Animations', 'Framer Motion'],
-        ['Database', 'PostgreSQL with Prisma'],
-        ['Real-time', 'Socket.io (coming soon)'],
-      ],
-    },
   ]
 
   return (
@@ -286,7 +275,6 @@ export function CreditsModal({ isOpen, onClose }: { isOpen: boolean; onClose: ()
       <div className="space-y-6">
         <div className="text-center">
           <h3 className="text-xl font-bold text-fg mb-1">Gems Rush</h3>
-          <p className="text-fg-muted">Match-3 Adventure Game</p>
         </div>
 
         {sections.map((section) => {
