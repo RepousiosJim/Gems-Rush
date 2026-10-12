@@ -5,7 +5,6 @@ import { motion } from 'framer-motion'
 import { cn } from '@/lib/utils'
 import { GameState, Gem } from '@/types/game'
 import { PowerUpGem } from '@/lib/game/GameEngine'
-import { Bomb, Hammer, Shuffle, Sparkles, Zap, type LucideIcon } from 'lucide-react'
 import GemIcon from '@/components/ui/GemIcon'
 
 interface GameBoardProps {
@@ -15,14 +14,6 @@ interface GameBoardProps {
   disabled?: boolean
   timeRushMode?: boolean
   currentHint?: { from: { row: number; col: number }; to: { row: number; col: number } } | null
-}
-
-const POWER_UP_ICONS: Record<PowerUpGem['powerUpType'], LucideIcon> = {
-  lightning: Zap,
-  rainbow: Sparkles,
-  bomb: Bomb,
-  hammer: Hammer,
-  shuffle: Shuffle
 }
 
 export default function GameBoard({ 
@@ -135,16 +126,12 @@ export default function GameBoard({
     const isHinted = currentHint && 
       ((currentHint.from.row === row && currentHint.from.col === col) ||
        (currentHint.to.row === row && currentHint.to.col === col))
-    const isPowerUp = isPowerUpGem(gem)
-
-    const PowerUpIcon = isPowerUp ? POWER_UP_ICONS[gem.powerUpType] : null
 
     return (
       <motion.div
         key={gem.id}
         className={cn(
           "relative rounded-lg flex items-center justify-center select-none bg-ink/40",
-          isPowerUp && 'bg-surface-2 ring-2 ring-gold',
           isSelected && 'ring-2 ring-gold z-20',
           isHinted && !isSelected && 'ring-2 ring-violet',
           disabled ? 'opacity-60 cursor-not-allowed' : 'cursor-pointer'
@@ -165,14 +152,10 @@ export default function GameBoard({
         }}
         whileTap={!disabled ? { scale: 0.95 } : {}}
       >
-        {PowerUpIcon ? (
-          <PowerUpIcon className="text-violet" size={Math.round(gemSize * 0.5)} />
-        ) : (
-          <GemIcon type={gem.type} size={Math.round(gemSize * 0.82)} />
-        )}
+        <GemIcon type={gem.type} size={Math.round(gemSize * 0.9)} powerUp={gem.powerUpType} />
       </motion.div>
     )
-  }, [selectedGem, animatingGems, currentHint, isPowerUpGem, gemSize, handleGemClick, disabled])
+  }, [selectedGem, animatingGems, currentHint, gemSize, handleGemClick, disabled])
 
   return (
     <div className="relative">

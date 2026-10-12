@@ -24,21 +24,23 @@ const SLOT_CLASSES = {
   lg: 'w-16 h-16'
 }
 
-const ICON_SIZES = { sm: 33, md: 39, lg: 52 }
+const ICON_SIZES = { sm: 36, md: 43, lg: 58 }
 
 const gemVariants: Variants = {
-  default: { scale: 1, opacity: 1 },
+  default: { scale: 1, y: 0, opacity: 1, filter: 'brightness(1)' },
   selected: {
-    scale: [1, 1.06, 1],
+    scale: [1.06, 1.12, 1.06],
+    filter: 'brightness(1.15)',
     transition: { duration: 0.9, repeat: Infinity, ease: 'easeInOut' }
   },
   hinted: {
-    opacity: [1, 0.55, 1],
-    transition: { duration: 1.2, repeat: Infinity, ease: 'easeInOut' }
+    y: [0, -3, 0],
+    transition: { duration: 0.8, repeat: Infinity, ease: 'easeInOut' }
   },
   matched: {
-    scale: [1, 1.2, 0],
+    scale: [1, 1.25, 0],
     opacity: [1, 1, 0],
+    filter: ['brightness(1)', 'brightness(2.4)', 'brightness(3)'],
     transition: { duration: 0.45, ease: 'easeOut' }
   }
 }
@@ -72,16 +74,23 @@ export default function EnhancedGem({
       className={cn(
         'relative flex items-center justify-center rounded-lg bg-ink/40',
         SLOT_CLASSES[size],
-        isSelected && 'ring-2 ring-gold',
-        isHinted && !isSelected && 'ring-2 ring-violet',
+        isSelected && 'bg-gold/15 ring-2 ring-gold shadow-[0_0_14px_rgba(245,196,81,0.55)]',
+        isHinted && !isSelected && 'bg-violet/15 ring-2 ring-violet',
         isAdjacent && !isSelected && !isHinted && 'ring-1 ring-line-strong',
         disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
       )}
-      variants={gemVariants}
-      animate={variant}
       whileTap={disabled ? undefined : { scale: 0.94 }}
     >
-      <GemIcon type={gem.type} size={ICON_SIZES[size]} />
+      {isHinted && !isSelected && (
+        <motion.span
+          className="absolute inset-0 rounded-lg shadow-[0_0_14px_rgba(139,124,246,0.8)]"
+          animate={{ opacity: [0.3, 1, 0.3] }}
+          transition={{ duration: 1.2, repeat: Infinity, ease: 'easeInOut' }}
+        />
+      )}
+      <motion.span className="flex" variants={gemVariants} animate={variant}>
+        <GemIcon type={gem.type} size={ICON_SIZES[size]} powerUp={gem.powerUpType} />
+      </motion.span>
     </motion.button>
   )
 }
