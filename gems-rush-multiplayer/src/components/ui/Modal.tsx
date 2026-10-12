@@ -32,9 +32,11 @@ interface ModalProps {
   subtitle?: string
   children: React.ReactNode
   size?: 'md' | 'lg'
+  // Tabbed dialogs keep one height on mobile so the tab row stays put
+  fill?: boolean
 }
 
-export function Modal({ isOpen, onClose, title, icon: Icon, subtitle, children, size = 'md' }: ModalProps) {
+export function Modal({ isOpen, onClose, title, icon: Icon, subtitle, children, size = 'md', fill }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -84,7 +86,7 @@ export function Modal({ isOpen, onClose, title, icon: Icon, subtitle, children, 
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
             transition={{ duration: 0.2 }}
-            className={`card w-full ${sizeClass} max-h-[85dvh] overflow-hidden flex flex-col rounded-b-none border-b-0 sm:max-h-[calc(100dvh-8vh-2rem)] sm:rounded-b-2xl sm:border-b`}
+            className={`card w-full ${sizeClass} max-h-[85dvh] overflow-hidden flex flex-col rounded-b-none border-b-0 sm:max-h-[calc(100dvh-8vh-1rem)] sm:rounded-b-2xl sm:border-b ${fill ? 'h-[85dvh] sm:h-auto' : ''}`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-line">
@@ -176,7 +178,7 @@ export function GameGuideModal({ isOpen, onClose }: { isOpen: boolean; onClose: 
   ]
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Game Guide" icon={Target} size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} title="Game Guide" icon={Target} size="lg" fill>
       <div className="flex flex-col gap-5">
         <ModalTabs tabs={tabs} active={activeTab} onChange={setActiveTab} />
 

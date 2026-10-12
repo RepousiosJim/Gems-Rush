@@ -151,6 +151,7 @@ export default function UserDashboard({
       subtitle={`Level ${userStats.level} profile`}
       icon={Crown}
       size="lg"
+      fill
     >
       <div className="space-y-6">
         {/* Profile summary */}
