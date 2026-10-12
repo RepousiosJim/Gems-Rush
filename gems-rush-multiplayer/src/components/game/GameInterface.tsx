@@ -541,12 +541,6 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
                 <span className="hidden sm:inline">Hint</span>
               </button>
             )}
-
-            {onNextLevel && gameState.gameStatus === 'completed' && (
-              <button onClick={onNextLevel} className="btn btn-primary">
-                <span>Next level</span>
-              </button>
-            )}
           </motion.div>
         )}
 
