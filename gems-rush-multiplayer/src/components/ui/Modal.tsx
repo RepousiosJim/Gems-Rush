@@ -175,7 +175,7 @@ export function GameGuideModal({ isOpen, onClose }: { isOpen: boolean; onClose: 
                   <Target size={18} /> Objective
                 </h4>
                 <p className="text-fg-muted">
-                  Match 3 or more identical gems in a row (horizontally or vertically) to clear them from the board and score points. Reach the target score to advance to the next level.
+                  Match 3 or more identical gems in a row or column to clear them and score points. In Classic, reach the level goal before the moves run out.
                 </p>
               </div>
               <div>
@@ -189,14 +189,6 @@ export function GameGuideModal({ isOpen, onClose }: { isOpen: boolean; onClose: 
                   <li>When gems are matched, they disappear and new gems fall down</li>
                   <li>Chain reactions create combo multipliers for bonus points</li>
                 </ul>
-              </div>
-              <div>
-                <h4 className="text-base font-semibold text-fg mb-2 flex items-center gap-2">
-                  <Zap size={18} /> Combo System
-                </h4>
-                <p className="text-fg-muted">
-                  Create chain reactions for large point bonuses. Each cascade increases your combo multiplier, boosting your score.
-                </p>
               </div>
             </div>
           )}
