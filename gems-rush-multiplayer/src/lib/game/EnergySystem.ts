@@ -70,10 +70,7 @@ export class EnergyManager {
   consumeEnergy(currentEnergy: number, actionType: 'game' | 'move' = 'game'): number {
     const validEnergy = isNaN(currentEnergy) ? 0 : currentEnergy
     const cost = actionType === 'game' ? this.config.energyCostPerGame : this.config.energyCostPerAction
-    const newEnergy = Math.max(0, validEnergy - cost)
-    
-    console.log(`⚡ Energy consumed: ${validEnergy} - ${cost} = ${newEnergy}`)
-    return newEnergy
+    return Math.max(0, validEnergy - cost)
   }
 
   // Format time remaining as human readable

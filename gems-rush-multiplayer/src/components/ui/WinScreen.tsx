@@ -84,24 +84,18 @@ export default function WinScreen({
       return
     }
 
-    // Only run this effect when the modal first opens
-    console.log('WinScreen opened, starting animation phases...')
-
     // Much shorter delays to avoid issues
     const celebrationTimer = setTimeout(() => {
-      console.log('Animation phase: rewards')
       setAnimationPhase('rewards')
     }, 1000) // Reduced to 1 second
 
     // Show options immediately after rewards
     const optionsTimer = setTimeout(() => {
-      console.log('Animation phase: options (buttons should show)')
       setAnimationPhase('options')
     }, 1500) // Show buttons after 1.5 seconds
 
     // Emergency fallback - force buttons to show
     const emergencyTimer = setTimeout(() => {
-      console.log('Emergency: forcing options phase')
       setAnimationPhase('options')
     }, 2000) // Emergency after 2 seconds
 
