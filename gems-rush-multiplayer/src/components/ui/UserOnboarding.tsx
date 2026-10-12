@@ -31,7 +31,7 @@ const onboardingSteps: OnboardingStep[] = [
   {
     id: 'welcome',
     title: 'Welcome to Gems Rush',
-    description: 'Match elemental gems, chain combos, and climb the realms in this match-3 adventure.',
+    description: 'Match gems in a row or column to score points.',
     icon: Gamepad2,
   },
   {
@@ -55,13 +55,13 @@ const onboardingSteps: OnboardingStep[] = [
   {
     id: 'progression',
     title: 'Level Up & Earn Rewards',
-    description: 'Gain XP, level up, and unlock new features. Earn coins and gems along the way.',
+    description: 'Gain XP and level up. Earn coins and gems along the way.',
     icon: Star,
   },
   {
     id: 'ready',
     title: 'Ready to Start?',
-    description: 'You\'re all set. Start with Classic Mode to get familiar with the gameplay, then explore other modes as you progress.',
+    description: 'Start with Classic.',
     icon: Rocket,
     action: 'Start Playing',
   },
