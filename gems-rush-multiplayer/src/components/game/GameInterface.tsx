@@ -9,7 +9,6 @@ import ObstacleBlockComponent from '@/components/ui/ObstacleBlock'
 import WinScreen from '@/components/ui/WinScreen'
 import { VisualEffectsProvider, useVisualEffects } from '@/components/ui/VisualEffectsManager'
 import { usePerformanceOptimization } from '@/hooks/usePerformanceOptimization'
-import { obstacleBlockManager } from '@/lib/game/ObstacleBlockManager'
 import { stageSystem } from '@/lib/game/StageSystem'
 
 // Simple className utility function
@@ -27,14 +26,15 @@ interface GameInterfaceProps {
   onShowSettings?: () => void
   onShowHint?: () => void
   currentHint?: { from: { row: number; col: number }; to: { row: number; col: number } } | null
+  rewards?: { coins: number; gems: number; xp: number; stars: number }
   disabled?: boolean
 }
 
 // Separate component to avoid provider nesting issues
-const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPause, onShowMenu, onShowSettings, onShowHint, currentHint, disabled }: GameInterfaceProps): ReactElement => {
+const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPause, onShowMenu, onShowSettings, onShowHint, currentHint, rewards, disabled }: GameInterfaceProps): ReactElement => {
   const [selectedGem, setSelectedGem] = useState<{ row: number; col: number } | null>(null)
   const [adjacentGems, setAdjacentGems] = useState<{ row: number; col: number }[]>([])
-  const [combos, setCombos] = useState<number>(0)
+  const [chains, setChains] = useState<number>(0)
   const [showHintMessage, setShowHintMessage] = useState(false)
   const boardRef = useRef<HTMLDivElement>(null)
 
@@ -46,7 +46,6 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
     shouldAnimate,
     shouldShowEffects,
     optimizedThrottle,
-    optimizedDebounce,
     setManualQuality,
     isQualityLocked
   } = usePerformanceOptimization('locked') // Always lock quality during gameplay
@@ -92,15 +91,6 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
     return Math.max(32, baseSize) // Minimum 32px per gem
   }, [boardSize])
 
-  // Performance-optimized hint system
-  const showHints = useCallback(
-    optimizedDebounce(() => {
-      if (quality === 'minimal') return
-      console.log('💡 Hint system: analyzing board for potential moves...')
-    }, 2000),
-    [quality]
-  )
-
   // Optimized adjacent positions calculation
   const getAdjacentPositions = useCallback((row: number, col: number) => {
     const positions: { row: number; col: number }[] = []
@@ -121,8 +111,6 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
   const handleMatchDetection = useCallback(
     optimizedThrottle((matchedPositions: { row: number; col: number }[]) => {
       if (matchedPositions.length === 0) return
-
-      setCombos(prev => prev + 1)
 
       if (shouldShowEffects) {
         matchedPositions.forEach((pos, index) => {
@@ -218,6 +206,7 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
           isSelected={isSelected}
           isAdjacent={isAdjacent}
           isHinted={isHinted}
+          isMatched={!!gem?.isMatched}
           onClick={() => handleGemClick(row, col)}
           disabled={disabled}
           size={gemSize < 40 ? 'sm' : gemSize < 60 ? 'md' : 'lg'}
@@ -264,6 +253,13 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
       </div>
     )
   }, [selectedGem, adjacentGems, currentHint, disabled, handleGemClick, gemSize])
+
+  // A cascade is every extra match the engine resolved after the first one in a move
+  useEffect(() => {
+    if (gameState.moves > 0 && gameState.comboMultiplier > 1) {
+      setChains(prev => prev + gameState.comboMultiplier - 1)
+    }
+  }, [gameState.moves, gameState.comboMultiplier])
 
   const isStageMode = gameState.gameMode === 'stage'
   const progressPct = Math.round((gameState.score / gameState.targetScore) * 100)
@@ -365,7 +361,7 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
           <div>
             <div className="stat-label">Combo</div>
             <div className="stat-value text-violet">{gameState.comboMultiplier.toFixed(1)}x</div>
-            {combos > 0 && <div className="text-xs text-fg-dim">{combos} chains</div>}
+            {chains > 0 && <div className="text-xs text-fg-dim">{chains} {chains === 1 ? 'chain' : 'chains'}</div>}
           </div>
 
           {isStageMode && gameState.currentStage && (
@@ -465,7 +461,7 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
           animate={{ y: 0, opacity: 1 }}
           transition={{ duration: 0.25, delay: 0.15 }}
         >
-          <button onClick={onRestart} disabled={disabled} className="btn btn-secondary">
+          <button onClick={onRestart} className="btn btn-secondary">
             <RotateCcw size={18} />
             <span className="hidden sm:inline">Restart</span>
           </button>
@@ -531,13 +527,7 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
         }}
         onRestart={onRestart}
         showRewards={true}
-        rewards={{
-          coins: Math.floor(gameState.score / 10),
-          gems: Math.max(1, Math.floor(gameState.score / 100)),
-          xp: Math.floor(gameState.score / 5),
-          stars: gameState.score >= gameState.targetScore * 2.5 ? 3 :
-                 gameState.score >= gameState.targetScore * 1.8 ? 2 : 1
-        }}
+        rewards={rewards}
       />
 
       {/* Performance indicator (debug) */}
@@ -547,10 +537,7 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
           <div className="chip">Score: {gameState.score.toLocaleString()} / Target: {gameState.targetScore.toLocaleString()}</div>
           <div className="chip">Status: {gameState.gameStatus}</div>
           <button
-            onClick={() => {
-              console.log('Debug: Triggering win condition manually')
-              window.dispatchEvent(new CustomEvent('debug-win-test'))
-            }}
+            onClick={() => window.dispatchEvent(new CustomEvent('debug-win-test'))}
             className="btn btn-secondary h-8 px-3 text-xs"
           >
             Test Win

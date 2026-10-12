@@ -1,11 +1,10 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { GameEngine } from '@/lib/game/GameEngine'
+import { GameEngine, HintMove } from '@/lib/game/GameEngine'
 import { GameState } from '@/types/game'
 import { energyManager } from '@/lib/game/EnergySystem'
 import { dynamicContentManager } from '@/lib/game/DynamicContentSystem'
-import { tutorialManager } from '@/lib/game/ProgressiveTutorialSystem'
 import { stageSystem } from '@/lib/game/StageSystem'
 import { obstacleBlockManager } from '@/lib/game/ObstacleBlockManager'
 import EnhancedMainMenu from '@/components/ui/EnhancedMainMenu'
@@ -28,6 +27,27 @@ function formatEventTimeLeft(endTime: number): string {
   const minutes = Math.floor((remaining % (1000 * 60 * 60)) / (1000 * 60))
   return hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
 }
+
+const XP_PER_LEVEL = 100
+
+const calculateLevelUp = (xp: number) => Math.floor(xp / XP_PER_LEVEL) + 1
+
+interface Rewards {
+  coins: number
+  gems: number
+  xp: number
+}
+
+const NO_REWARDS: Rewards = { coins: 0, gems: 0, xp: 0 }
+
+const classicRewards = (score: number): Rewards => ({
+  coins: Math.floor(score / 10),
+  gems: Math.max(1, Math.floor(score / 100)),
+  xp: Math.floor(score / 5)
+})
+
+const starsFor = (score: number, targetScore: number) =>
+  score >= targetScore * 2.5 ? 3 : score >= targetScore * 1.8 ? 2 : 1
 
 type AppState = 'menu' | 'game' | 'timeRush' | 'loading' | 'stageSelect'
 type ModalState = 'settings' | 'guide' | 'credits' | 'statistics' | 'dashboard' | null
@@ -89,13 +109,23 @@ interface UserStatsType {
   }
 }
 
+function addRewards(stats: UserStatsType, rewards: Rewards): UserStatsType {
+  const xp = stats.xp + rewards.xp
+  return {
+    ...stats,
+    coins: stats.coins + rewards.coins,
+    gems: stats.gems + rewards.gems,
+    xp,
+    level: calculateLevelUp(xp)
+  }
+}
+
 export default function HomePage() {
   const [settings] = useSettings()
   const [appState, setAppState] = useState<AppState>('loading')
   const [modalState, setModalState] = useState<ModalState>(null)
   const [gameEngine, setGameEngine] = useState<GameEngine | null>(null)
   const [gameState, setGameState] = useState<GameState | null>(null)
-  const [currentStage, setCurrentStage] = useState(1)
   const [isInitialized, setIsInitialized] = useState(false)
   const [showOnboarding, setShowOnboarding] = useState(false)
   const [userStats, setUserStats] = useState<UserStatsType>({
@@ -128,69 +158,57 @@ export default function HomePage() {
       lastStepTime: Date.now()
     }
   })
-    const gameEngineRef = useRef<GameEngine | null>(null)
+  const gameEngineRef = useRef<GameEngine | null>(null)
+  const gameStateRef = useRef<GameState | null>(null)
+  const hintTimeoutRef = useRef<NodeJS.Timeout | null>(null)
+  const timeRushExitRef = useRef<NodeJS.Timeout | null>(null)
+  // True from the moment a round starts until its result is recorded, so a round settles exactly once
+  const roundOpenRef = useRef(false)
 
-  // Add hint state management
   const [currentHint, setCurrentHint] = useState<{ from: { row: number; col: number }; to: { row: number; col: number } } | null>(null)
-  const [hintTimeout, setHintTimeout] = useState<NodeJS.Timeout | null>(null)
+  const [winRewards, setWinRewards] = useState<(Rewards & { stars: number }) | null>(null)
 
-  // Add energy session tracking
-  const [currentGameSession, setCurrentGameSession] = useState<{
-    id: string
-    startTime: number
-    mode: string
-    energyConsumed: boolean
-  } | null>(null)
+  const commitGameState = (next: GameState | null) => {
+    gameStateRef.current = next
+    setGameState(next)
+  }
+
+  const clearHint = () => {
+    if (hintTimeoutRef.current) {
+      clearTimeout(hintTimeoutRef.current)
+      hintTimeoutRef.current = null
+    }
+    setCurrentHint(null)
+  }
+
+  // Replace or end the current engine: stops its timers and drops its listeners
+  const disposeEngine = () => {
+    if (timeRushExitRef.current) {
+      clearTimeout(timeRushExitRef.current)
+      timeRushExitRef.current = null
+    }
+    gameEngineRef.current?.cleanup()
+    gameEngineRef.current = null
+    setGameEngine(null)
+    clearHint()
+  }
 
   // Debug win condition test (development only)
   useEffect(() => {
-    if (process.env.NODE_ENV === 'development' && typeof window !== 'undefined') {
-      const handleDebugWin = () => {
-        if (gameState && gameState.gameStatus === 'playing') {
-          console.log('🧪 Debug: Manually triggering win condition')
-          setGameState(prev => {
-            if (!prev) return null
-            return {
-              ...prev,
-              score: prev.targetScore, // Set score to exactly target score
-              gameStatus: 'completed'
-            }
-          })
-        }
-      }
+    if (process.env.NODE_ENV !== 'development') return
 
-      const handleResetEnergy = () => {
-        console.log('🧪 Debug: Resetting energy system')
-        localStorage.removeItem('gems-rush-user-stats')
-        localStorage.removeItem('gems-rush-has-played')
-        window.location.reload()
-      }
-
-      window.addEventListener('debug-win-test', handleDebugWin)
-      window.addEventListener('debug-reset-energy', handleResetEnergy)
-      
-      // Add a global function for easy testing
-      ;(window as any).resetEnergySystem = handleResetEnergy
-      ;(window as any).debugEnergyStatus = () => {
-        console.log('⚡ Current energy status:', {
-          userStats: userStats,
-          localStorage: localStorage.getItem('gems-rush-user-stats')
-        })
-        
-        const testEnergyStatus = energyManager.getEnergyStatus(
-          userStats.energy,
-          userStats.lastEnergyUpdate,
-          userStats.maxEnergy
-        )
-        console.log('⚡ Calculated energy status:', testEnergyStatus)
-      }
-      
-      return () => {
-        window.removeEventListener('debug-win-test', handleDebugWin)
-        window.removeEventListener('debug-reset-energy', handleResetEnergy)
-      }
+    const handleDebugWin = () => {
+      const current = gameStateRef.current
+      if (current?.gameStatus !== 'playing') return
+      const won: GameState = { ...current, score: current.targetScore, gameStatus: 'completed' }
+      commitGameState(won)
+      winRound(won)
     }
-  }, [gameState, userStats])
+
+    window.addEventListener('debug-win-test', handleDebugWin)
+    return () => window.removeEventListener('debug-win-test', handleDebugWin)
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
 
   // Initialize the app
   useEffect(() => {
@@ -200,22 +218,22 @@ export default function HomePage() {
         const savedStats = localStorage.getItem('gems-rush-user-stats')
         if (savedStats) {
           const parsedStats = JSON.parse(savedStats)
-          
+
           // Validate and sanitize energy values
           const validEnergy = isNaN(parsedStats.energy) ? 100 : Math.max(0, parsedStats.energy)
           const validMaxEnergy = isNaN(parsedStats.maxEnergy) ? 100 : Math.max(1, parsedStats.maxEnergy)
           const validLastUpdate = isNaN(parsedStats.lastEnergyUpdate) ? Date.now() : parsedStats.lastEnergyUpdate
-          
+
           // Update energy based on time passed
           const regenerated = energyManager.advance(
             validEnergy,
             validLastUpdate,
             validMaxEnergy
           )
-          
+
           // Check for new daily events
           const currentEvent = dynamicContentManager.getCurrentDailyEvent()
-          
+
           // Ensure tutorialProgress has proper defaults
           const defaultTutorialProgress = {
             currentStep: 1,
@@ -224,7 +242,7 @@ export default function HomePage() {
             skipped: false,
             lastStepTime: Date.now()
           }
-          
+
           // Update stats with current energy and event
           const updatedStats = {
             ...parsedStats,
@@ -236,17 +254,14 @@ export default function HomePage() {
             // Ensure tutorialProgress is properly initialized
             tutorialProgress: parsedStats.tutorialProgress || defaultTutorialProgress
           }
-          
+
           setUserStats(updatedStats)
         } else {
-          // Initialize with default energy values for new users
-          console.log('⚡ New user - initializing with default energy values')
-          
           // Check for new daily events
           const currentEvent = dynamicContentManager.getCurrentDailyEvent()
-          
+
           // Set up complete user stats for new users with full energy
-          const newUserStats = {
+          setUserStats({
             ...userStats, // Use the default state values
             energy: 100, // Start with full energy
             maxEnergy: 100,
@@ -260,20 +275,7 @@ export default function HomePage() {
               skipped: false,
               lastStepTime: Date.now()
             }
-          }
-          
-          console.log(`⚡ New user energy initialized: ${newUserStats.energy}/${newUserStats.maxEnergy}`)
-          console.log('⚡ Full new user stats:', newUserStats)
-          
-          // Double-check by testing energy calculation immediately
-          const testEnergyStatus = energyManager.getEnergyStatus(
-            newUserStats.energy,
-            newUserStats.lastEnergyUpdate,
-            newUserStats.maxEnergy
-          )
-          console.log(`⚡ Energy status after initialization: ${testEnergyStatus.currentEnergy}/${testEnergyStatus.maxEnergy}`)
-          
-          setUserStats(newUserStats)
+          })
         }
 
         // Check if user has played before
@@ -291,6 +293,7 @@ export default function HomePage() {
     }
 
     initializeApp()
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
   // Enhanced energy regeneration timer with better state management
@@ -303,7 +306,7 @@ export default function HomePage() {
         const maxEnergy = isNaN(prev.maxEnergy) ? 100 : prev.maxEnergy
         const currentEnergy = isNaN(prev.energy) ? maxEnergy : prev.energy // Use max energy as default for NaN, not 0!
         const lastUpdate = isNaN(prev.lastEnergyUpdate) ? Date.now() : prev.lastEnergyUpdate
-        
+
         const regenerated = energyManager.advance(currentEnergy, lastUpdate, maxEnergy)
         if (regenerated.energy === currentEnergy) return prev
 
@@ -325,227 +328,137 @@ export default function HomePage() {
     }
   }, [userStats, isInitialized])
 
-  const setupGameEngineListeners = (engine: GameEngine) => {
-    engine.on('game:score-updated', (score: number, _change: number) => {
-      if (gameState) {
-        const newGameState = { ...gameState, score }
-        setGameState(newGameState)
-      }
-    })
-
-    engine.on('game:level-completed', (level: number) => {
-      if (gameState) {
-        const newGameState = { ...gameState, level }
-        setGameState(newGameState)
-        setCurrentStage(level)
-        
-        // Update user XP and level
-        setUserStats(prev => ({
-          ...prev,
-          level: Math.max(prev.level, level),
-          xp: prev.xp + (level * 100)
-        }))
-      }
-    })
-
-    engine.on('game:game-over', (_reason: string) => {
-      if (gameState) {
-        const newGameState = { ...gameState, gameStatus: 'failed' as const }
-        setGameState(newGameState)
-        
-        // Base rewards based on performance (even for failed games)
-        const baseCoinsEarned = Math.floor(gameState.score / 200) // Reduced for failed games
-        const baseXP = Math.floor(gameState.score / 2) // Reduced XP for failed games
-        
-        // Apply dynamic content modifiers
-        const modifiedRewards = dynamicContentManager.applyEventModifiers(
-          { coins: baseCoinsEarned, xp: baseXP },
-          userStats.currentDailyEvent as any
-        )
-        
-        // Update user stats with modified rewards
-        setUserStats(prev => {
-          const updatedStats = {
-            ...prev,
-            coins: prev.coins + (modifiedRewards.coins || 0),
-            xp: prev.xp + (modifiedRewards.xp || 0),
-            totalScore: prev.totalScore + gameState.score,
-            averageScore: Math.floor((prev.totalScore + gameState.score) / Math.max(prev.gamesPlayed, 1)),
-            bestScore: Math.max(prev.bestScore, gameState.score)
-          }
-          
-          // Check for tutorial step completion
-          if (gameState.score > 5000 && prev.tutorialProgress && !prev.tutorialProgress.completedSteps.includes('first_match')) {
-            const updatedProgress = tutorialManager.completeStep('first_match', prev.tutorialProgress)
-            updatedStats.tutorialProgress = updatedProgress
-          }
-          
-          return updatedStats
-        })
-        
-        // End game session without completion bonus
-        endGameSession(false)
-        
-        console.log('💀 Game Over - Session ended, partial rewards given:', modifiedRewards)
-      }
-    })
-
-    // Enhanced power-up system listeners
-    engine.on('game:powerup-created', (powerUpGem: any) => {
-      console.log(`⚡ Power-up created: ${powerUpGem.powerUpType} at (${powerUpGem.row}, ${powerUpGem.col})`)
-      // Could show special effects or notifications here
-    })
-
-    engine.on('game:powerup-activated', (powerUpGem: any, effects: any) => {
-      console.log(`💥 Power-up activated: ${powerUpGem.powerUpType}, affected ${effects.affectedGems.length} gems`)
-      // Could show dramatic visual effects here
-    })
-
-    // Enhanced hint system listeners with visual highlighting
-    engine.on('hint:show', (hintMove: any) => {
-      console.log(`💡 Hint: Try swapping (${hintMove.from.row}, ${hintMove.from.col}) with (${hintMove.to.row}, ${hintMove.to.col})`)
-      console.log(`💰 Potential score: ${hintMove.score}, Match count: ${hintMove.matchCount}`)
-      
-      // Set the hint for visual highlighting
-      setCurrentHint({
-        from: { row: hintMove.from.row, col: hintMove.from.col },
-        to: { row: hintMove.to.row, col: hintMove.to.col }
+  // The engine owns the board, score and moves; listeners only touch refs and setters, never render state
+  const attachEngineListeners = (engine: GameEngine) => {
+    engine.on('game:board-changed', (state: GameState) => {
+      const prev = gameStateRef.current
+      if (!prev) return
+      commitGameState({
+        ...prev,
+        board: state.board,
+        score: state.score,
+        moves: state.moves,
+        comboMultiplier: state.comboMultiplier,
+        lastMoveScore: state.lastMoveScore
       })
-      
-      // Clear hint after 5 seconds
-      if (hintTimeout) {
-        clearTimeout(hintTimeout)
-      }
-      const timeout = setTimeout(() => {
-        setCurrentHint(null)
-      }, 5000)
-      setHintTimeout(timeout)
     })
 
-    engine.on('hint:hide', () => {
-      console.log('💡 Hiding hint')
-      setCurrentHint(null)
-      if (hintTimeout) {
-        clearTimeout(hintTimeout)
-        setHintTimeout(null)
-      }
+    engine.on('hint:show', (hint: HintMove) => {
+      if (hintTimeoutRef.current) clearTimeout(hintTimeoutRef.current)
+      setCurrentHint({ from: hint.from, to: hint.to })
+      hintTimeoutRef.current = setTimeout(clearHint, 5000)
     })
 
-    // Board management listeners
-    engine.on('board:no-moves', () => {
-      console.log('🔄 No moves available - preparing for reshuffle')
-      // Could show "Reshuffling..." message
-    })
-
-    engine.on('board:reshuffled', () => {
-      console.log('🔄 Board reshuffled - new moves available!')
-      // Could show "New moves available!" message
-    })
+    engine.on('hint:hide', clearHint)
 
     engine.on('game:error', (error: Error) => {
-      console.error('🎮 Game Engine Error:', error)
+      console.error('Game engine error:', error)
     })
   }
 
-  const initializeGame = async (mode: string, isLevelTransition: boolean = false) => {
+  const spendEnergy = () => {
+    setUserStats(prev => {
+      const regenerated = energyManager.advance(prev.energy, prev.lastEnergyUpdate, prev.maxEnergy)
+      return {
+        ...prev,
+        // The clock keeps its partial progress; a full bar starts regenerating from now
+        energy: energyManager.consumeEnergy(regenerated.energy, 'game'),
+        lastEnergyUpdate: regenerated.lastUpdate,
+        gamesPlayed: prev.gamesPlayed + 1
+      }
+    })
+  }
+
+  const canStartNewGame = () =>
+    energyManager.getEnergyStatus(userStats.energy, userStats.lastEnergyUpdate, userStats.maxEnergy).canPlayGame
+
+  // Record the result of the open round once: rewards, score stats and the win energy bonus
+  const settleRound = (
+    score: number,
+    won: boolean,
+    rewards: Rewards = NO_REWARDS,
+    patch?: (prev: UserStatsType) => Partial<UserStatsType>
+  ) => {
+    if (!roundOpenRef.current) return
+    roundOpenRef.current = false
+
+    setUserStats(prev => {
+      const totalScore = prev.totalScore + score
+      const rewarded = addRewards(prev, rewards)
+      return {
+        ...rewarded,
+        energy: won ? Math.min(prev.energy + 1, prev.maxEnergy) : prev.energy,
+        totalScore,
+        averageScore: Math.floor(totalScore / Math.max(prev.gamesPlayed, 1)),
+        bestScore: Math.max(prev.bestScore, score),
+        ...patch?.(prev)
+      }
+    })
+  }
+
+  const abandonRound = () => settleRound(gameStateRef.current?.score ?? 0, false)
+
+  const winRound = (state: GameState) => {
+    let rewards: Rewards & { stars: number }
+    if (state.gameMode === 'stage' && state.currentStage) {
+      rewards = stageSystem.completeStage(state.currentStage, state.score, state.moves, state.blocksDestroyed ?? 0).rewards
+    } else {
+      rewards = { ...classicRewards(state.score), stars: starsFor(state.score, state.targetScore) }
+    }
+
+    setWinRewards(rewards)
+    settleRound(state.score, true, rewards)
+    disposeEngine()
+  }
+
+  const failRound = (state: GameState) => {
+    settleRound(state.score, false)
+    disposeEngine()
+  }
+
+  const initializeGame = async (
+    mode: string,
+    { level = 1, stage, transition = false }: { level?: number; stage?: number; transition?: boolean } = {}
+  ) => {
     try {
-      let gameSession = currentGameSession
-
-      // Only check energy and create new session if not a level transition
-      if (!isLevelTransition) {
-        if (!canStartNewGame()) {
-          console.warn('⚡ Not enough energy to start a new game!')
-          // Show energy insufficient modal or offer refill
-          return
-        }
-
-        // Start new game session
-        gameSession = startNewGameSession(mode)
+      // A level transition continues the paid session, so only brand new games need energy
+      if (!transition && !canStartNewGame()) {
+        console.warn('Not enough energy to start a new game')
+        return
       }
 
       setAppState('loading')
-      
-      if (gameEngineRef.current) {
-        gameEngineRef.current.removeAllListeners()
-      }
+      disposeEngine()
 
-        const engine = new GameEngine()
+      const stageData = mode === 'stage' && stage ? stageSystem.getStage(stage) : null
+      const engine = new GameEngine(
+        {
+          level,
+          gameMode: mode as GameState['gameMode'],
+          currentStage: stage,
+          ...(stageData && { targetScore: stageData.targetScore })
+        },
+        { autoComplete: false }
+      )
       await engine.initialize()
-      
-      setupGameEngineListeners(engine)
-      
-      // Only consume energy for brand new games (not level transitions)
-      if (!isLevelTransition && gameSession && !gameSession.energyConsumed) {
-        const energyConsumed = consumeEnergyForSession(gameSession)
-        if (!energyConsumed) {
-          console.error('⚡ Failed to consume energy for game session')
-          setAppState('menu')
-          return
-        }
-      }
-      
-      // Check for tutorial progression (only for new sessions)
-      if (!isLevelTransition) {
-        const nextTutorialStep = tutorialManager.getNextStep(
-          userStats.tutorialProgress,
-          {
-            level: userStats.level,
-            gamesPlayed: userStats.gamesPlayed,
-            achievements: userStats.achievements
-          }
+      attachEngineListeners(engine)
+
+      if (!transition) spendEnergy()
+
+      const initialGameState = engine.getGameState()
+      if (stageData && stage) {
+        initialGameState.obstacleBlocks = obstacleBlockManager.generateObstacleBlocks(
+          stage,
+          initialGameState.boardSize,
+          initialGameState.board
         )
-        
-        if (nextTutorialStep && nextTutorialStep.trigger === 'auto') {
-          console.log('🎓 Tutorial step available:', nextTutorialStep.title)
-        }
-      }
-      
-      const initialGameState: GameState = {
-        board: engine.getGameState().board,
-        obstacleBlocks: [],
-        boardSize: 8,
-        score: 0,
-        level: 1,
-        moves: 0,
-        timeRemaining: mode === 'timeAttack' ? 60 : undefined,
-        selectedGem: null,
-        gameMode: mode as 'normal' | 'timeAttack' | 'dailyChallenge' | 'campaign' | 'stage',
-        gameStatus: 'playing',
-        isAnimating: false,
-        matchesFound: [],
-        isMultiplayer: false,
-        players: [],
-        powerUps: [],
-        comboMultiplier: 1,
-        lastMoveScore: 0,
-        targetScore: 1000,
-        currentStage: mode === 'stage' ? currentStage : undefined,
-        blocksDestroyed: 0
       }
 
-      // Generate obstacle blocks for stage mode
-      if (mode === 'stage') {
-        const currentStageData = stageSystem.getStage(currentStage)
-        if (currentStageData) {
-          const obstacles = obstacleBlockManager.generateObstacleBlocks(
-            currentStage,
-            initialGameState.boardSize,
-            initialGameState.board
-          )
-          initialGameState.obstacleBlocks = obstacles
-          initialGameState.targetScore = currentStageData.targetScore
-          
-          console.log(`🎮 Stage ${currentStage}: ${currentStageData.name}`)
-          console.log(`🎯 Target: ${currentStageData.targetScore} | Max Moves: ${currentStageData.maxMoves} | Blocks to Break: ${currentStageData.blocksToBreak}`)
-        }
-      }
-
-      setGameEngine(engine)
-      setGameState(initialGameState)
       gameEngineRef.current = engine
+      roundOpenRef.current = true
+      setWinRewards(null)
+      commitGameState(initialGameState)
       setAppState('game')
-      
-      console.log(`🎮 Game initialized - Mode: ${mode}, Session: ${gameSession?.id}, Energy consumed: ${gameSession?.energyConsumed}`)
     } catch (error) {
       console.error('Failed to initialize game:', error)
       setAppState('menu')
@@ -559,46 +472,29 @@ export default function HomePage() {
       // Initialize Time Rush mode
       initializeTimeRushMode()
     } else {
-      initializeGame(mode, false) // false = new game session
+      initializeGame(mode)
     }
   }
 
   const initializeTimeRushMode = async () => {
     try {
       if (!canStartNewGame()) {
-        console.warn('⚡ Not enough energy to start Time Rush!')
+        console.warn('Not enough energy to start Time Rush')
         return
       }
 
       setAppState('loading')
-      
-      // Start new game session for Time Rush
-      const gameSession = startNewGameSession('timeAttack')
-      
-      if (gameEngineRef.current) {
-        gameEngineRef.current.removeAllListeners()
-      }
+      disposeEngine()
 
-      const engine = new GameEngine()
+      const engine = new GameEngine({ gameMode: 'timeAttack' }, { autoComplete: false })
       await engine.initialize()
-      
-      setupGameEngineListeners(engine)
-      
-      // Consume energy for Time Rush session
-      if (gameSession && !gameSession.energyConsumed) {
-        const energyConsumed = consumeEnergyForSession(gameSession)
-        if (!energyConsumed) {
-          console.error('⚡ Failed to consume energy for Time Rush session')
-          setAppState('menu')
-          return
-        }
-      }
-      
-      setGameEngine(engine)
+
+      spendEnergy()
+
       gameEngineRef.current = engine
+      roundOpenRef.current = true
+      setGameEngine(engine)
       setAppState('timeRush')
-      
-      console.log('🚀 Time Rush mode initialized!')
     } catch (error) {
       console.error('Failed to initialize Time Rush mode:', error)
       setAppState('menu')
@@ -606,288 +502,120 @@ export default function HomePage() {
   }
 
   const handleTimeRushEnd = (finalScore: number, stats: TimeRushStats) => {
-    console.log('⚡ Time Rush completed!', { finalScore, stats })
-    
-    // End game session with completion
-    endGameSession(true)
-    
-    // Update user stats with Time Rush specific data
-    setUserStats(prev => {
-      const levelUpData = calculateLevelUp(prev.xp, stats.rushBonus + Math.floor(finalScore / 5))
-      
-      return {
-        ...prev,
-        coins: prev.coins + Math.floor(finalScore / 10) + stats.rushBonus,
-        xp: prev.xp + stats.rushBonus + Math.floor(finalScore / 5),
-        level: levelUpData.newLevel,
-        totalScore: prev.totalScore + finalScore,
-        bestScore: Math.max(prev.bestScore, finalScore),
+    settleRound(
+      finalScore,
+      false,
+      {
+        coins: Math.floor(finalScore / 10) + stats.rushBonus,
+        gems: 0,
+        xp: stats.rushBonus + Math.floor(finalScore / 5)
+      },
+      prev => ({
         bestTimeRushScore: Math.max(prev.bestTimeRushScore, finalScore),
-        timeRushGamesPlayed: prev.timeRushGamesPlayed + 1,
-        averageScore: Math.floor((prev.totalScore + finalScore) / (prev.gamesPlayed + 1))
-      }
-    })
-    
-    // Show results for a moment before returning to menu
-    setTimeout(() => {
-      setAppState('menu')
-    }, 3000)
-  }
+        timeRushGamesPlayed: prev.timeRushGamesPlayed + 1
+      })
+    )
 
-  const calculateLevelUp = (currentXP: number, xpGained: number) => {
-    const newXP = currentXP + xpGained
-    const currentLevel = Math.floor(newXP / 100) + 1 // 100 XP per level
-    
-    return {
-      newLevel: currentLevel,
-      newXP: newXP,
-      leveledUp: Math.floor(currentXP / 100) + 1 < currentLevel
-    }
+    // Show results for a moment before returning to menu
+    timeRushExitRef.current = setTimeout(handleShowMenu, 3000)
   }
 
   const handleStageSelect = (stageNumber: number) => {
     if (stageSystem.isStageUnlocked(stageNumber)) {
-      setCurrentStage(stageNumber)
       stageSystem.setCurrentStage(stageNumber)
-      initializeGame('stage', false) // false = new game session
-    } else {
-      console.warn(`Stage ${stageNumber} is not unlocked yet!`)
+      initializeGame('stage', { stage: stageNumber })
     }
   }
 
   const handleShowMenu = () => {
-    // End current game session when going back to menu
-    endGameSession(false) // false = not completed
-    
-    if (gameEngineRef.current) {
-      gameEngineRef.current.removeAllListeners()
-      gameEngineRef.current = null
-    }
-    setGameEngine(null)
-    setGameState(null)
+    abandonRound()
+    disposeEngine()
+    commitGameState(null)
     setAppState('menu')
-    
-    console.log('🏠 Returned to menu - Game session ended')
   }
 
   const handleRestart = () => {
-    if (gameState) {
-      // For restart, check if we have energy for a new session
-      if (!canStartNewGame()) {
-        console.warn('⚡ Not enough energy to restart!')
-        // Could show energy insufficient modal
-        return
-      }
-      
-      // End current session and start fresh
-      endGameSession(false)
-      initializeGame(gameState.gameMode, false) // false = new game session
-    }
+    const current = gameStateRef.current
+    if (!current || !canStartNewGame()) return
+
+    abandonRound()
+    initializeGame(current.gameMode, { level: current.level, stage: current.currentStage })
   }
 
   const handleNextLevel = () => {
-    const nextStage = currentStage + 1
-    setCurrentStage(nextStage)
-    
-    // Calculate and apply level completion rewards
-    if (gameState) {
-      const levelRewards = {
-        coins: Math.floor(gameState.score / 10),
-        gems: Math.floor(gameState.score / 100),
-        xp: Math.floor(gameState.score / 5)
-      }
-      
-      // Apply rewards to user stats (energy bonus handled in endGameSession)
-      setUserStats(prev => ({
-        ...prev,
-        coins: prev.coins + levelRewards.coins,
-        gems: prev.gems + levelRewards.gems,
-        xp: prev.xp + levelRewards.xp,
-        totalScore: prev.totalScore + gameState.score
-      }))
-      
-      console.log('🏆 Level completed! Rewards given:', levelRewards)
-      
-      // End current session with completion bonus
-      endGameSession(true) // true = completed successfully
-      
-      // Continue to next level within the same energy session
-      setTimeout(() => {
-        initializeGame(gameState.gameMode, true) // true = level transition, don't consume new energy
-      }, 100)
-    }
-  }
+    const current = gameStateRef.current
+    if (!current) return
 
-  const handleLevelComplete = () => {
-    // This function handles immediate level completion rewards
-    if (gameState) {
-      const levelRewards = {
-        coins: Math.floor(gameState.score / 10),
-        gems: Math.floor(gameState.score / 100),
-        xp: Math.floor(gameState.score / 5)
+    if (current.gameMode === 'stage' && current.currentStage) {
+      const nextStage = current.currentStage + 1
+      if (!stageSystem.isStageUnlocked(nextStage)) {
+        commitGameState(null)
+        setAppState('stageSelect')
+        return
       }
-      
-      // Update user stats with rewards (energy bonus handled elsewhere)
-      setUserStats(prev => ({
-        ...prev,
-        coins: prev.coins + levelRewards.coins,
-        gems: prev.gems + levelRewards.gems,
-        xp: prev.xp + levelRewards.xp,
-        bestScore: Math.max(prev.bestScore, gameState.score),
-        totalScore: prev.totalScore + gameState.score,
-        averageScore: Math.floor((prev.totalScore + gameState.score) / Math.max(prev.gamesPlayed, 1))
-      }))
-      
-      // End game session with completion bonus
-      endGameSession(true)
-      
-      return levelRewards
+      stageSystem.setCurrentStage(nextStage)
+      initializeGame('stage', { stage: nextStage, transition: true })
+    } else {
+      initializeGame(current.gameMode, { level: current.level + 1, transition: true })
     }
-    return { coins: 0, gems: 0, xp: 0 }
   }
 
   const handlePause = () => {
-    if (gameState && gameEngine) {
-      const newStatus: 'playing' | 'paused' = gameState.gameStatus === 'paused' ? 'playing' : 'paused'
-      const newGameState = { ...gameState, gameStatus: newStatus }
-      setGameState(newGameState)
+    const engine = gameEngineRef.current
+    const current = gameStateRef.current
+    if (!engine || !current) return
+
+    if (current.gameStatus === 'paused') {
+      engine.resume()
+      commitGameState({ ...current, gameStatus: 'playing' })
+    } else if (current.gameStatus === 'playing') {
+      engine.pause()
+      clearHint()
+      commitGameState({ ...current, gameStatus: 'paused' })
     }
   }
 
   const handleShowHint = () => {
-    if (gameEngine) {
-      const hintResult = gameEngine.showHint()
-      if (hintResult.success) {
-        console.log('🔍 Showing hint:', hintResult.message)
-        // UI will automatically receive the hint via the event listener
-      } else {
-        console.warn('⚠️ Cannot show hint:', hintResult.message)
-      }
-    } else {
-      console.log('🔍 No game engine available for hints')
-    }
+    gameEngineRef.current?.showHint()
   }
 
-  // Clear hint when player makes a move
   const handleMove = (fromRow: number, fromCol: number, toRow: number, toCol: number) => {
-    // Clear current hint when player makes a move
-    if (currentHint) {
-      setCurrentHint(null)
-      if (hintTimeout) {
-        clearTimeout(hintTimeout)
-        setHintTimeout(null)
-      }
-    }
+    clearHint()
 
-    if (gameEngine && gameState && gameState.gameStatus === 'playing' && !gameState.isAnimating) {
-      gameEngine.makeMove(fromRow, fromCol, toRow, toCol).then((result) => {
-        if (result.valid) {
-          setGameState(prevState => {
-            if (!prevState) return null
-            
-            const newScore = prevState.score + result.scoreChange
-            let newObstacleBlocks = [...prevState.obstacleBlocks]
-            let blocksDestroyed = prevState.blocksDestroyed || 0
-            
-            // Check for obstacle block destruction when gems are matched
-            if (result.matchesFound && result.matchesFound.length > 0) {
-              const allMatchedGems = result.matchesFound.flat()
-              const destructionResult = obstacleBlockManager.checkObstacleDestruction(
-                allMatchedGems,
-                newObstacleBlocks
-              )
-              
-              newObstacleBlocks = destructionResult.remainingBlocks
-              blocksDestroyed += destructionResult.destroyedBlocks.length
-              
-              if (destructionResult.destroyedBlocks.length > 0) {
-                console.log(`💥 Destroyed ${destructionResult.destroyedBlocks.length} obstacle blocks!`)
-              }
-            }
-            
-            const newGameState = {
-              ...prevState,
-              board: result.newBoard,
-              score: newScore,
-              moves: prevState.moves + 1,
-              matchesFound: result.matchesFound,
-              comboMultiplier: result.comboCount > 0 ? result.comboCount : 1,
-              lastMoveScore: result.scoreChange,
-              obstacleBlocks: newObstacleBlocks,
-              blocksDestroyed
-            }
-            
-            // Check win condition based on game mode
-            if (prevState.gameMode === 'stage' && prevState.currentStage) {
-              const stageData = stageSystem.getStage(prevState.currentStage)
-              if (stageData) {
-                const scoreReached = newScore >= stageData.targetScore
-                const blocksDestroyed_req = blocksDestroyed >= stageData.blocksToBreak
-                const movesValid = newGameState.moves <= stageData.maxMoves
-                
-                if (scoreReached && blocksDestroyed_req && movesValid) {
-                  console.log(`🏆 Stage ${prevState.currentStage} completed!`)
-                  console.log(`📊 Score: ${newScore}/${stageData.targetScore} | Blocks: ${blocksDestroyed}/${stageData.blocksToBreak} | Moves: ${newGameState.moves}/${stageData.maxMoves}`)
-                  newGameState.gameStatus = 'completed'
-                  
-                  // Complete the stage and get rewards
-                  setTimeout(() => {
-                    const completion = stageSystem.completeStage(
-                      prevState.currentStage!,
-                      newScore,
-                      newGameState.moves,
-                      blocksDestroyed
-                    )
-                    
-                    if (completion.success) {
-                      console.log(`⭐ Earned ${completion.stars} stars! Rewards:`, completion.rewards)
-                      
-                      // Update user stats with stage rewards
-                      setUserStats(prev => ({
-                        ...prev,
-                        coins: prev.coins + completion.rewards.coins,
-                        gems: prev.gems + completion.rewards.gems,
-                        xp: prev.xp + completion.rewards.xp,
-                        totalScore: prev.totalScore + newScore
-                      }))
-                      
-                      // End current session with completion bonus
-                      endGameSession(true)
-                      
-                      if (completion.nextStageUnlocked) {
-                        console.log(`🔓 Stage ${completion.nextStageUnlocked} unlocked!`)
-                      }
-                    }
-                  }, 500)
-                } else if (newGameState.moves >= stageData.maxMoves && !scoreReached) {
-                  // Failed due to running out of moves
-                  console.log(`💔 Stage failed - not enough score in time`)
-                  newGameState.gameStatus = 'failed'
-                  
-                  // End session without completion bonus
-                  setTimeout(() => {
-                    endGameSession(false)
-                  }, 500)
-                }
-              }
-            } else {
-              // Regular win condition for non-stage modes
-              if (newScore >= prevState.targetScore) {
-                console.log(`🏆 Level completed! Score: ${newScore} / Target: ${prevState.targetScore}`)
-                newGameState.gameStatus = 'completed'
-                
-                // Call the level complete handler to award rewards
-                setTimeout(() => {
-                  handleLevelComplete()
-                }, 500) // Small delay to let the UI update first
-              }
-            }
-            
-            return newGameState
-          })
-        }
-      })
-    }
+    const engine = gameEngineRef.current
+    if (!engine || gameStateRef.current?.gameStatus !== 'playing') return
+
+    engine.makeMove(fromRow, fromCol, toRow, toCol).then(result => {
+      const prev = gameStateRef.current
+      // The round may have been restarted or ended while the move was resolving
+      if (!result.valid || !prev || gameEngineRef.current !== engine) return
+
+      let obstacleBlocks = prev.obstacleBlocks
+      let blocksDestroyed = prev.blocksDestroyed || 0
+      if (result.matchesFound.length > 0) {
+        const destruction = obstacleBlockManager.checkObstacleDestruction(result.matchesFound.flat(), obstacleBlocks)
+        obstacleBlocks = destruction.remainingBlocks
+        blocksDestroyed += destruction.destroyedBlocks.length
+      }
+
+      const next: GameState = { ...prev, matchesFound: result.matchesFound, obstacleBlocks, blocksDestroyed }
+
+      const stageData = next.gameMode === 'stage' && next.currentStage ? stageSystem.getStage(next.currentStage) : null
+      if (stageData) {
+        const cleared =
+          next.score >= stageData.targetScore &&
+          blocksDestroyed >= stageData.blocksToBreak &&
+          next.moves <= stageData.maxMoves
+        if (cleared) next.gameStatus = 'completed'
+        else if (next.moves >= stageData.maxMoves) next.gameStatus = 'failed'
+      } else if (next.score >= next.targetScore) {
+        next.gameStatus = 'completed'
+      }
+
+      commitGameState(next)
+      if (next.gameStatus === 'completed') winRound(next)
+      else if (next.gameStatus === 'failed') failRound(next)
+    }).catch(error => console.error('Move failed:', error))
   }
 
   const closeModal = () => {
@@ -904,14 +632,6 @@ export default function HomePage() {
   const handleOnboardingSkip = () => {
     localStorage.setItem('gems-rush-has-played', 'true')
     setShowOnboarding(false)
-  }
-
-  const handleQuickPlay = () => {
-    handleModeSelect('normal')
-  }
-
-  const handleShowDailyChallenge = () => {
-    handleModeSelect('dailyChallenge')
   }
 
   const handleShowDashboard = () => {
@@ -938,119 +658,6 @@ export default function HomePage() {
     })
   }
 
-  const handleCompleteTutorialStep = (stepId: string) => {
-    setUserStats(prev => {
-      const updatedProgress = tutorialManager.completeStep(stepId, prev.tutorialProgress)
-      const rewards = tutorialManager.getMilestoneRewards(updatedProgress)
-      
-      return {
-        ...prev,
-        tutorialProgress: updatedProgress,
-        coins: prev.coins + (rewards.coins || 0),
-        gems: prev.gems + (rewards.gems || 0),
-        xp: prev.xp + (rewards.xp || 0),
-        energy: Math.min(prev.energy + (rewards.energy || 0), prev.maxEnergy)
-      }
-    })
-  }
-
-  // Enhanced energy management functions
-  const canStartNewGame = () => {
-    const currentEnergy = isNaN(userStats.energy) ? 0 : userStats.energy
-    const lastUpdate = isNaN(userStats.lastEnergyUpdate) ? Date.now() : userStats.lastEnergyUpdate
-    const maxEnergy = isNaN(userStats.maxEnergy) ? 100 : userStats.maxEnergy
-    
-    const energyStatus = energyManager.getEnergyStatus(
-      currentEnergy,
-      lastUpdate,
-      maxEnergy
-    )
-    return energyStatus.canPlayGame
-  }
-
-  const startNewGameSession = (mode: string) => {
-    const sessionId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`
-    const session = {
-      id: sessionId,
-      startTime: Date.now(),
-      mode,
-      energyConsumed: false
-    }
-    setCurrentGameSession(session)
-    return session
-  }
-
-  const consumeEnergyForSession = (session: { id: string; startTime: number; mode: string; energyConsumed: boolean }) => {
-    if (session.energyConsumed) {
-      console.log('⚡ Energy already consumed for this session')
-      return false
-    }
-
-    const currentEnergy = isNaN(userStats.energy) ? 0 : userStats.energy
-    const lastUpdate = isNaN(userStats.lastEnergyUpdate) ? Date.now() : userStats.lastEnergyUpdate
-    const maxEnergy = isNaN(userStats.maxEnergy) ? 100 : userStats.maxEnergy
-
-    const regenerated = energyManager.advance(currentEnergy, lastUpdate, maxEnergy)
-
-    if (!energyManager.canPerformAction(regenerated.energy, 'game')) {
-      console.warn('⚡ Not enough energy to play!')
-      return false
-    }
-
-    // The clock keeps its partial progress; a full bar starts regenerating from now
-    setUserStats(prev => ({
-      ...prev,
-      energy: energyManager.consumeEnergy(regenerated.energy, 'game'),
-      lastEnergyUpdate: regenerated.lastUpdate,
-      gamesPlayed: prev.gamesPlayed + 1
-    }))
-
-    setCurrentGameSession(prev => prev ? { ...prev, energyConsumed: true } : null)
-    return true
-  }
-
-  const endGameSession = (completed: boolean = false) => {
-    if (currentGameSession && completed) {
-      // Award bonus energy for completing levels
-      setUserStats(prev => {
-        const currentEnergy = isNaN(prev.energy) ? 0 : prev.energy
-        const maxEnergy = isNaN(prev.maxEnergy) ? 100 : prev.maxEnergy
-        const bonusEnergy = Math.min(currentEnergy + 1, maxEnergy)
-        
-        console.log(`⚡ Level completed! Energy bonus: ${currentEnergy} + 1 = ${bonusEnergy}`)
-        
-        return {
-          ...prev,
-          energy: bonusEnergy
-        }
-      })
-      console.log('⚡ Bonus energy awarded for level completion!')
-    }
-    
-    setCurrentGameSession(null)
-  }
-
-  // Add energy status display for debugging and user feedback
-  const getEnergyStatusMessage = () => {
-    const currentEnergy = isNaN(userStats.energy) ? 0 : userStats.energy
-    const lastUpdate = isNaN(userStats.lastEnergyUpdate) ? Date.now() : userStats.lastEnergyUpdate
-    const maxEnergy = isNaN(userStats.maxEnergy) ? 100 : userStats.maxEnergy
-    
-    const energyStatus = energyManager.getEnergyStatus(
-      currentEnergy,
-      lastUpdate,
-      maxEnergy
-    )
-    
-    if (energyStatus.isFull) {
-      return '⚡ Energy Full - Ready to play!'
-    } else if (energyStatus.isEmpty) {
-      return '💤 No energy - Wait or refill to continue'
-    } else {
-      return `⚡ Energy: ${energyStatus.currentEnergy}/${energyStatus.maxEnergy} - Next: ${energyStatus.timeToNextEnergy}`
-    }
-  }
-
   const screen = (() => {
     // Show loading screen
     if (!isInitialized || appState === 'loading') {
@@ -1068,7 +675,7 @@ export default function HomePage() {
     }
 
     // Game interface
-    if (appState === 'game' && gameEngine && gameState) {
+    if (appState === 'game' && gameState) {
       return (
         <>
           <GameInterface
@@ -1081,6 +688,8 @@ export default function HomePage() {
             onShowSettings={() => setModalState('settings')}
             onShowHint={settings.hints ? handleShowHint : undefined}
             currentHint={currentHint}
+            rewards={winRewards ?? undefined}
+            disabled={gameState.gameStatus !== 'playing'}
           />
         
           {/* Game modals */}
@@ -1097,7 +706,7 @@ export default function HomePage() {
           <TimeRushMode
             gameEngine={gameEngine}
             onGameEnd={handleTimeRushEnd}
-            onPause={() => console.log('Pause not supported in Time Rush')}
+            onPause={() => {}}
             onShowMenu={handleShowMenu}
           />
         
