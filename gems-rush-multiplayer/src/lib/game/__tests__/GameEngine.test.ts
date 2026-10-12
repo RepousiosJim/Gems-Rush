@@ -88,6 +88,47 @@ describe('GameEngine', () => {
     })
   })
 
+  describe('match detection geometry', () => {
+    it('finds both groups when a horizontal and a vertical run share a gem', () => {
+      const board = createCalmBoard()
+      for (const col of [0, 1, 2]) board[1][col] = { ...board[1][col]!, type: 'fire' }
+      for (const row of [1, 2, 3]) board[row][1] = { ...board[row][1]!, type: 'fire' }
+
+      const groups = gameEngine.findAllMatches(board)
+      expect(groups.map(g => g.matchType).sort()).toEqual(['horizontal', 'vertical'])
+    })
+  })
+
+  describe('coordinates', () => {
+    beforeEach(async () => {
+      await gameEngine.initialize()
+    })
+
+    it('does not move gems when scanning for hints', () => {
+      const board = createBoardWithMove()
+      expect(gameEngine.getAllPossibleMoves(board).length).toBeGreaterThan(0)
+      expectCoordinatesMatchPositions(board)
+    })
+
+    it('keeps coordinates consistent after a move', async () => {
+      setBoard(gameEngine, createBoardWithMove())
+
+      const result = await gameEngine.makeMove(0, 2, 0, 3)
+      expect(result.valid).toBe(true)
+      expectCoordinatesMatchPositions(gameEngine.getGameState().board)
+    })
+
+    it('keeps the board unchanged when a swap makes no match', async () => {
+      const board = createCalmBoard()
+      setBoard(gameEngine, board)
+
+      const result = await gameEngine.makeMove(0, 0, 0, 1)
+      expect(result.valid).toBe(false)
+      expect(gameEngine.getGameState().board).toBe(board)
+      expectCoordinatesMatchPositions(board)
+    })
+  })
+
   describe('move validation', () => {
     beforeEach(async () => {
       await gameEngine.initialize()
@@ -180,6 +221,38 @@ describe('GameEngine', () => {
 })
 
 // Helper functions for creating test data
+const TYPE_ORDER: GemType[] = ['fire', 'water', 'earth', 'nature', 'lightning']
+
+// 8x8 board with no matches (each cell differs from both neighbours in every line)
+function createCalmBoard(): (Gem | null)[][] {
+  return createTestBoard(
+    Array.from({ length: 8 }, (_, row) =>
+      Array.from({ length: 8 }, (_, col) => TYPE_ORDER[(2 * row + col) % 5])
+    )
+  )
+}
+
+// Calm board where swapping (0,2) and (0,3) makes fire at (0,0)-(0,2)
+function createBoardWithMove(): (Gem | null)[][] {
+  const board = createCalmBoard()
+  board[0][1] = { ...board[0][1]!, type: 'fire' }
+  board[0][3] = { ...board[0][3]!, type: 'fire' }
+  return board
+}
+
+function setBoard(engine: GameEngine, board: (Gem | null)[][]) {
+  ;(engine as unknown as { gameState: { board: (Gem | null)[][] } }).gameState.board = board
+}
+
+function expectCoordinatesMatchPositions(board: (Gem | null)[][]) {
+  board.forEach((row, r) =>
+    row.forEach((gem, c) => {
+      expect(gem).not.toBeNull()
+      expect([gem!.row, gem!.col]).toEqual([r, c])
+    })
+  )
+}
+
 function createTestBoard(layout: GemType[][]): (Gem | null)[][] {
   return layout.map((row, rowIndex) =>
     row.map((gemType, colIndex) => ({

@@ -260,35 +260,28 @@ export class GameEngine extends EventEmitter {
     return hasMatch
   }
 
+  // Find the match group through a position in one direction
+  private groupAt(board: (Gem | null)[][], row: number, col: number, direction: 'horizontal' | 'vertical'): MatchGroup | null {
+    const gem = board[row]?.[col]
+    if (!gem) return null
+
+    const gems = this.getMatchingGemsInDirection(board, row, col, gem.type, direction)
+    if (gems.length < GAME_CONFIG.MIN_MATCH_SIZE) return null
+
+    return {
+      gems,
+      type: gem.type,
+      matchType: direction,
+      powerUpCreated: this.determinePowerUpType(gems.length)
+    }
+  }
+
   // Find matches starting from a specific position
   private findMatchesAt(board: (Gem | null)[][], row: number, col: number): MatchGroup[] {
-    const matches: MatchGroup[] = []
-    const gem = board[row]?.[col]
-    if (!gem) return matches
-
-    // Check horizontal match
-    const horizontalGems = this.getMatchingGemsInDirection(board, row, col, gem.type, 'horizontal')
-    if (horizontalGems.length >= GAME_CONFIG.MIN_MATCH_SIZE) {
-      matches.push({
-        gems: horizontalGems,
-        type: gem.type,
-        matchType: 'horizontal',
-        powerUpCreated: this.determinePowerUpType(horizontalGems.length)
-      })
-    }
-
-    // Check vertical match
-    const verticalGems = this.getMatchingGemsInDirection(board, row, col, gem.type, 'vertical')
-    if (verticalGems.length >= GAME_CONFIG.MIN_MATCH_SIZE) {
-      matches.push({
-        gems: verticalGems,
-        type: gem.type,
-        matchType: 'vertical',
-        powerUpCreated: this.determinePowerUpType(verticalGems.length)
-      })
-    }
-
-    return matches
+    return [
+      this.groupAt(board, row, col, 'horizontal'),
+      this.groupAt(board, row, col, 'vertical')
+    ].filter((group): group is MatchGroup => group !== null)
   }
 
   // Get matching gems in a specific direction
@@ -310,7 +303,7 @@ export class GameEngine extends EventEmitter {
       }
       
       // Collect all matching gems
-      for (let col = colStart; col < size && board[startRow][col]?.type === gemType; col++) {
+      for (let col = colStart; col < board[startRow].length && board[startRow][col]?.type === gemType; col++) {
         gems.push(board[startRow][col]!)
       }
     } else {
@@ -391,8 +384,6 @@ export class GameEngine extends EventEmitter {
       const matches = this.findAllMatches(newBoard)
       
       if (matches.length === 0) {
-        // No matches, swap back
-        this.swapGems(newBoard, fromRow, fromCol, toRow, toCol)
         this.isAnimating = false
         return {
           valid: false,
@@ -550,32 +541,27 @@ export class GameEngine extends EventEmitter {
     return gems
   }
 
-  // Find all matches on the board with enhanced algorithm
+  // Find all matches on the board
   findAllMatches(board: (Gem | null)[][]): MatchGroup[] {
     const matches: MatchGroup[] = []
-    const processedPositions = new Set<string>()
-
-    console.log('🔍 Starting enhanced match detection...')
+    const seen = { horizontal: new Set<string>(), vertical: new Set<string>() }
 
     for (let row = 0; row < board.length; row++) {
       for (let col = 0; col < board[row].length; col++) {
-        const gem = board[row][col]
-        if (!gem || processedPositions.has(`${row},${col}`)) continue
+        for (const direction of ['horizontal', 'vertical'] as const) {
+          if (seen[direction].has(`${row},${col}`)) continue
 
-        // Find matches starting from this position
-        const gemMatches = this.findMatchesAt(board, row, col)
-        
-        for (const match of gemMatches) {
-          // Mark all gems in this match as processed
+          const match = this.groupAt(board, row, col, direction)
+          if (!match) continue
+
           for (const matchGem of match.gems) {
-            processedPositions.add(`${matchGem.row},${matchGem.col}`)
+            seen[direction].add(`${matchGem.row},${matchGem.col}`)
           }
           matches.push(match)
         }
       }
     }
 
-    console.log(`✅ Enhanced match detection complete: found ${matches.length} match groups`)
     return matches
   }
 
@@ -721,23 +707,14 @@ export class GameEngine extends EventEmitter {
     return (rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1)
   }
 
-  // Swap two gems on the board
+  // Swap two gems on a copy of the board; gems are cloned so the original board's gems keep their coordinates
   private swapGems(board: (Gem | null)[][], row1: number, col1: number, row2: number, col2: number): (Gem | null)[][] {
     const newBoard = board.map(row => [...row])
-    
-    const temp = newBoard[row1][col1]
-    newBoard[row1][col1] = newBoard[row2][col2]
-    newBoard[row2][col2] = temp
+    const first = board[row1][col1]
+    const second = board[row2][col2]
 
-    // Update gem positions
-    if (newBoard[row1][col1]) {
-      newBoard[row1][col1]!.row = row1
-      newBoard[row1][col1]!.col = col1
-    }
-    if (newBoard[row2][col2]) {
-      newBoard[row2][col2]!.row = row2
-      newBoard[row2][col2]!.col = col2
-    }
+    newBoard[row1][col1] = second && { ...second, row: row1, col: col1 }
+    newBoard[row2][col2] = first && { ...first, row: row2, col: col2 }
 
     return newBoard
   }
@@ -749,10 +726,11 @@ export class GameEngine extends EventEmitter {
 
     for (let col = 0; col < boardSize; col++) {
       // Get all non-null gems in column from bottom to top
-      const gems = []
+      const gems: Gem[] = []
       for (let row = boardSize - 1; row >= 0; row--) {
-        if (newBoard[row][col]) {
-          gems.push(newBoard[row][col])
+        const gem = newBoard[row][col]
+        if (gem) {
+          gems.push(gem)
           newBoard[row][col] = null
         }
       }
@@ -760,10 +738,8 @@ export class GameEngine extends EventEmitter {
       // Place gems at bottom
       for (let i = 0; i < gems.length; i++) {
         const newRow = boardSize - 1 - i
-        newBoard[newRow][col] = gems[i]
-        if (newBoard[newRow][col]) {
-          newBoard[newRow][col]!.row = newRow
-        }
+        const gem = gems[i]
+        newBoard[newRow][col] = gem.row === newRow ? gem : { ...gem, row: newRow }
       }
     }
 
