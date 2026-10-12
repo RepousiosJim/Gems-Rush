@@ -45,6 +45,8 @@ export interface GameEngineEvents {
   'game:powerup-created': (powerUp: PowerUpGem) => void
   'game:powerup-activated': (powerUp: PowerUpGem, effects: { affectedGems: Gem[], scoreEarned: number }) => void
   'game:match-found': (matches: MatchGroup[]) => void
+  // Every gem removed from the board: matches, cascades and power-up blasts, each gem once per removal
+  'game:gems-cleared': (gems: Gem[]) => void
   'game:cascade': (cascadeLevel: number, matches: MatchGroup[]) => void
   'game:no-moves': () => void
   'game:reshuffle': () => void
@@ -414,6 +416,7 @@ export class GameEngine extends EventEmitter {
       newBoard[gem.row][gem.col] = null
       totalScore += 100 // Base score per gem removed by power-up
     }
+    this.emit('game:gems-cleared', affectedGems)
 
     let processedBoard = this.fillEmptySpaces(this.applyGravity(newBoard))
     const matchesFound: Gem[][] = []
@@ -524,6 +527,9 @@ export class GameEngine extends EventEmitter {
     const powerUpsCreated: PowerUpGem[] = []
 
     this.emit('game:match-found', initialMatches)
+    // A gem in both a row and a column group is removed once
+    const cleared = new Map(initialMatches.flatMap(group => group.gems).map(gem => [`${gem.row},${gem.col}`, gem]))
+    this.emit('game:gems-cleared', [...cleared.values()])
 
     // Process each match group
     for (const matchGroup of initialMatches) {
@@ -935,6 +941,16 @@ export class GameEngine extends EventEmitter {
     this.gameState.gameStatus = 'completed'
     this.stopHintTimer()
     this.emit('game:level-completed', this.gameState.level)
+  }
+
+  // Turn a random plain gem into a power-up; the caller sets it off with a self-swap through makeMove
+  placePowerUp(type: PowerUpType): { row: number; col: number } {
+    const cells = this.gameState.board.flat().filter((gem): gem is Gem => gem !== null && !this.isPowerUpGem(gem))
+    const { type: gemType, row, col } = cells[Math.floor(Math.random() * cells.length)]
+    this.gameState.board = this.gameState.board.map(line => [...line])
+    this.gameState.board[row][col] = this.createGem(gemType, row, col, true, type)
+    this.emit('game:board-changed', this.getGameState())
+    return { row, col }
   }
 
   // Legacy compatibility methods

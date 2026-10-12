@@ -272,6 +272,88 @@ describe('GameEngine', () => {
     })
   })
 
+  describe('gems-cleared', () => {
+    beforeEach(async () => {
+      await gameEngine.initialize()
+    })
+
+    const record = () => {
+      const cleared: Gem[][] = []
+      gameEngine.on('game:gems-cleared', (gems: Gem[]) => cleared.push(gems))
+      return cleared
+    }
+
+    it('reports the swap match and then the cascade it causes', async () => {
+      setBoard(gameEngine, createCascadeBoard())
+      const cleared = record()
+
+      await gameEngine.makeMove(7, 2, 7, 3)
+
+      expect(cleared[0].map(gem => gem.type)).toEqual(['fire', 'fire', 'fire'])
+      expect(cleared[1].filter(gem => gem.type === 'water').length).toBeGreaterThanOrEqual(3)
+      const all = cleared.flat()
+      expect(all.filter(gem => gem.type === 'fire').length).toBeGreaterThanOrEqual(3)
+      expect(all.filter(gem => gem.type === 'water').length).toBeGreaterThanOrEqual(3)
+    })
+
+    it('reports a gem shared by a row and a column group once', async () => {
+      const board = createCalmBoard()
+      for (const col of [0, 1, 2]) board[1][col] = { ...board[1][col]!, type: 'fire' }
+      for (const row of [1, 2, 3]) board[row][1] = { ...board[row][1]!, type: 'fire' }
+      const cleared = record()
+
+      const groups = gameEngine.findAllMatches(board)
+      const engine = gameEngine as unknown as { processMatchesAndCascades(b: typeof board, m: MatchGroup[], c: number): Promise<unknown> }
+      await engine.processMatchesAndCascades(board, groups, 0)
+
+      expect(groups).toHaveLength(2)
+      expect(cleared[0]).toHaveLength(groups[0].gems.length + groups[1].gems.length - 1)
+      expect(cleared[0].filter(gem => gem.row === 1 && gem.col === 1)).toHaveLength(1)
+    })
+
+    it('reports every gem a bomb removes, the bomb included', async () => {
+      const board = createCalmBoard()
+      withPowerUp(board, 4, 4, 'bomb')
+      setBoard(gameEngine, board)
+      const cleared = record()
+
+      await gameEngine.makeMove(4, 4, 4, 4)
+
+      expect(cleared[0]).toHaveLength(9)
+      expect(cleared[0].some(gem => gem.row === 4 && gem.col === 4)).toBe(true)
+    })
+
+    it('reports every gem of the colour a rainbow removes', async () => {
+      const board = createCalmBoard()
+      withPowerUp(board, 4, 5, 'rainbow')
+      const targetType = board[4][4]!.type
+      const targets = board.flat().filter(gem => gem!.type === targetType).length
+      setBoard(gameEngine, board)
+      const cleared = record()
+
+      await gameEngine.makeMove(4, 4, 4, 5)
+
+      expect(cleared[0].filter(gem => gem.type === targetType)).toHaveLength(targets)
+    })
+  })
+
+  describe('placePowerUp', () => {
+    it('turns one plain gem into a power-up that a self-swap sets off', async () => {
+      await gameEngine.initialize()
+      setBoard(gameEngine, createCalmBoard())
+
+      const { row, col } = gameEngine.placePowerUp('lightning')
+      const placed = gameEngine.getGameState().board[row][col] as Gem & { isPowerUp?: boolean }
+      expect(placed.isPowerUp).toBe(true)
+      expect(placed.powerUpType).toBe('lightning')
+
+      const result = await gameEngine.makeMove(row, col, row, col)
+      expect(result.valid).toBe(true)
+      expect(gameEngine.getGameState().score).toBeGreaterThanOrEqual(1500)
+      expect(gameEngine.getGameState().moves).toBe(1)
+    })
+  })
+
   describe('target and completion', () => {
     async function startWithMove(engine: GameEngine) {
       gameEngine = engine
@@ -513,6 +595,19 @@ function createBoardWithMove(): (Gem | null)[][] {
   const board = createCalmBoard()
   board[0][1] = { ...board[0][1]!, type: 'fire' }
   board[0][3] = { ...board[0][3]!, type: 'fire' }
+  return board
+}
+
+// Swapping (7,2) and (7,3) clears fire at (7,0)-(7,2); the waters above fall in beside (7,3) and clear too
+function createCascadeBoard(): (Gem | null)[][] {
+  const board = createCalmBoard()
+  const set = (row: number, col: number, type: GemType) => (board[row][col] = { ...board[row][col]!, type })
+  set(7, 0, 'fire')
+  set(7, 1, 'fire')
+  set(7, 2, 'water')
+  set(7, 3, 'fire')
+  set(6, 1, 'water')
+  set(6, 2, 'water')
   return board
 }
 
