@@ -273,7 +273,10 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
               }}
               transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
             >
-              <ArrowRight size={20} />
+              <ArrowRight
+                size={20}
+                style={{ transform: `rotate(${Math.atan2(currentHint.to.row - currentHint.from.row, currentHint.to.col - currentHint.from.col)}rad)` }}
+              />
             </motion.div>
           </motion.div>
         )}
@@ -343,12 +346,12 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
 
       {/* Hint toast */}
       <AnimatePresence>
-        {showHintMessage && currentHint && (
+        {showHintMessage && currentHint && gameState.gameStatus === 'playing' && (
           <motion.div
-            className="fixed top-16 left-1/2 -translate-x-1/2 z-50 card px-4 py-2"
-            initial={{ y: -12, opacity: 0 }}
+            className="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 card px-4 py-2"
+            initial={{ y: 12, opacity: 0 }}
             animate={{ y: 0, opacity: 1 }}
-            exit={{ y: -12, opacity: 0 }}
+            exit={{ y: 12, opacity: 0 }}
             transition={{ duration: 0.2 }}
           >
             <div className="flex items-center gap-2 text-sm text-fg">
