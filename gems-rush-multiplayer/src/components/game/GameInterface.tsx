@@ -303,7 +303,7 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
     <div className="min-h-screen bg-ink page-glow relative">
       {/* Top bar */}
       <motion.div
-        className="flex h-14 items-center justify-between px-4 md:px-6 relative z-10"
+        className="grid h-14 grid-cols-[1fr_auto_1fr] items-center px-4 md:px-6 relative z-10"
         initial={{ y: -8, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
         transition={{ duration: 0.25 }}
@@ -332,7 +332,7 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center justify-end gap-2">
           {onPause && (
             <button onClick={onPause} className="btn btn-icon btn-ghost" aria-label="Pause">
               {gameState.gameStatus === 'paused' ? <Play size={20} /> : <Pause size={20} />}
