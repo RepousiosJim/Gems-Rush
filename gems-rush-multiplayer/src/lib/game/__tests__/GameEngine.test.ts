@@ -110,11 +110,12 @@ describe('GameEngine', () => {
       expectCoordinatesMatchPositions(board)
     })
 
-    it('keeps coordinates consistent after a move', async () => {
+    it('keeps coordinates consistent and leaves no ready match after a move', async () => {
       setBoard(gameEngine, createBoardWithMove())
 
       const result = await gameEngine.makeMove(0, 2, 0, 3)
       expect(result.valid).toBe(true)
+      expect(gameEngine.findMatches(gameEngine.getGameState().board)).toHaveLength(0)
       expectCoordinatesMatchPositions(gameEngine.getGameState().board)
     })
 
@@ -126,6 +127,49 @@ describe('GameEngine', () => {
       expect(result.valid).toBe(false)
       expect(gameEngine.getGameState().board).toBe(board)
       expectCoordinatesMatchPositions(board)
+    })
+  })
+
+  describe('board generation and reshuffle', () => {
+    beforeEach(async () => {
+      await gameEngine.initialize()
+    })
+
+    it('creates boards with no matches and at least one move', () => {
+      for (let i = 0; i < 50; i++) {
+        const board = gameEngine.createValidBoard(8)
+        expect(gameEngine.findMatches(board)).toHaveLength(0)
+        expect(gameEngine.getAllPossibleMoves(board).length).toBeGreaterThan(0)
+        expectCoordinatesMatchPositions(board)
+      }
+    })
+
+    it('reshuffles into a board with no ready match and at least one move', () => {
+      const reshuffle = () => (gameEngine as unknown as { reshuffleBoard(): void }).reshuffleBoard()
+      for (let i = 0; i < 50; i++) {
+        reshuffle()
+        const { board } = gameEngine.getGameState()
+        expect(gameEngine.findMatches(board)).toHaveLength(0)
+        expect(gameEngine.getAllPossibleMoves(board).length).toBeGreaterThan(0)
+        expectCoordinatesMatchPositions(board)
+      }
+    })
+
+    it('keeps the same gems when reshuffling', () => {
+      const countTypes = (board: (Gem | null)[][]) =>
+        board.flat().reduce<Record<string, number>>((acc, gem) => ({ ...acc, [gem!.type]: (acc[gem!.type] ?? 0) + 1 }), {})
+      const before = countTypes(gameEngine.getGameState().board)
+      ;(gameEngine as unknown as { reshuffleBoard(): void }).reshuffleBoard()
+
+      expect(countTypes(gameEngine.getGameState().board)).toEqual(before)
+    })
+
+    it('keeps power-ups in place when reshuffling', () => {
+      const board = gameEngine.getGameState().board
+      board[3][3] = { ...board[3][3]!, powerUpType: 'bomb', isPowerUp: true } as Gem
+      ;(gameEngine as unknown as { reshuffleBoard(): void }).reshuffleBoard()
+
+      expect((gameEngine.getGameState().board[3][3] as { isPowerUp?: boolean }).isPowerUp).toBe(true)
     })
   })
 

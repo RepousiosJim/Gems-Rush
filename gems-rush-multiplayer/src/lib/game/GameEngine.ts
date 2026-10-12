@@ -39,7 +39,7 @@ export interface GameEngineEvents {
   'game:score-updated': (newScore: number, scoreChange?: number) => void
   'game:level-completed': (level: number) => void
   'game:game-over': (gameState: GameState) => void
-  'game:board-changed': (board: (Gem | null)[][]) => void
+  'game:board-changed': (gameState: GameState) => void
   'game:move-made': (move: GameMove, result: GameMoveResult) => void
   'game:level-up': (newLevel: number) => void
   'game:powerup-created': (powerUp: PowerUpGem) => void
@@ -109,9 +109,6 @@ export class GameEngine extends EventEmitter {
       
       // Create initial board with no matches but guaranteed moves
       const board = this.createValidBoard(boardSize)
-      if (!board) {
-        throw new Error('Failed to create initial board')
-      }
 
       // Set up game state
       this.gameState.board = board
@@ -134,82 +131,36 @@ export class GameEngine extends EventEmitter {
     }
   }
 
-  // Create a valid board with no initial matches but guaranteed moves
+  // Create a board with no matches and at least one possible move
   createValidBoard(size: number, maxAttempts: number = 100): (Gem | null)[][] {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const board = this.generateRandomBoard(size)
-      if (!this.hasInitialMatches(board) && this.hasPossibleMoves(board)) {
-        console.log(`✅ Valid board created in ${attempt + 1} attempts`)
+      const board = this.generateMatchFreeBoard(size)
+      if (this.hasPossibleMoves(board)) {
         return board
       }
     }
-    
-    // If we can't generate a valid board, create one with forced placement
-    console.log('⚠️ Using forced board generation')
-    return this.createForcedValidBoard(size)
+
+    throw new Error('Failed to create a playable board')
   }
 
-  // Generate a random board
-  private generateRandomBoard(size: number): (Gem | null)[][] {
+  // Fill a board gem by gem, never completing a match
+  private generateMatchFreeBoard(size: number): (Gem | null)[][] {
     const board: (Gem | null)[][] = []
     const gemTypes = Object.keys(GEM_TYPES) as GemType[]
 
-    for (let row = 0; row < size; row++) {
-      board[row] = []
-      for (let col = 0; col < size; col++) {
-        const gemType = gemTypes[Math.floor(Math.random() * gemTypes.length)]
-        board[row][col] = this.createGem(gemType, row, col)
-      }
-    }
-
-    return board
-  }
-
-  // Create board with careful placement to avoid matches but ensure moves
-  private createForcedValidBoard(size: number): (Gem | null)[][] {
-    const board: (Gem | null)[][] = []
-    const gemTypes = Object.keys(GEM_TYPES) as GemType[]
-
-    // Fill board ensuring no immediate matches
     for (let row = 0; row < size; row++) {
       board[row] = []
       for (let col = 0; col < size; col++) {
         let gemType: GemType
-        let attempts = 0
-        
         do {
           gemType = gemTypes[Math.floor(Math.random() * gemTypes.length)]
-          attempts++
-        } while (
-          attempts < 50 && 
-          this.wouldCreateMatch(board, row, col, gemType)
-        )
+        } while (this.wouldCreateMatch(board, row, col, gemType))
 
         board[row][col] = this.createGem(gemType, row, col)
       }
     }
 
-    // Ensure at least one possible move exists
-    if (!this.hasPossibleMoves(board)) {
-      this.forcePossibleMove(board)
-    }
-
     return board
-  }
-
-  // Force at least one possible move on the board
-  private forcePossibleMove(board: (Gem | null)[][]): void {
-    const size = board.length
-    const gemTypes = Object.keys(GEM_TYPES) as GemType[]
-    
-    // Create a simple 3-in-a-row opportunity
-    if (size >= 3) {
-      const targetType = gemTypes[0]
-      // Place pattern that will match when swapped
-      board[0][0] = this.createGem(targetType, 0, 0)
-      board[0][2] = this.createGem(targetType, 0, 2)
-      board[0][1] = this.createGem(gemTypes[1], 0, 1) // Different type in middle
-    }
   }
 
   // Check if board has any initial matches
@@ -416,7 +367,7 @@ export class GameEngine extends EventEmitter {
       }
       
       this.emit('game:move-made', { id: Date.now().toString(), playerId: 'local', fromRow, fromCol, toRow, toCol, timestamp: Date.now(), type: 'swap' }, result)
-      this.emit('game:board-changed', this.gameState.board)
+      this.emit('game:board-changed', this.getGameState())
       this.emit('game:score-updated', this.gameState.score, result.scoreChange)
 
       return result
@@ -948,50 +899,48 @@ export class GameEngine extends EventEmitter {
     }
   }
 
-  // Reshuffle board when no moves available
-  private reshuffleBoard(): void {
-    console.log('🔄 Reshuffling board...')
-    
-    // Collect all gems (excluding power-ups for now)
-    const gems: Gem[] = []
-    for (let row = 0; row < this.gameState.boardSize; row++) {
-      for (let col = 0; col < this.gameState.boardSize; col++) {
-        const gem = this.gameState.board[row][col]
-        if (gem && !this.isPowerUpGem(gem)) {
-          gems.push(gem)
-        }
+  // Reshuffle board when no moves available; power-ups stay where they are
+  private reshuffleBoard(maxAttempts: number = 50): void {
+    const { boardSize, board: current } = this.gameState
+    const movable: Gem[] = []
+    for (let row = 0; row < boardSize; row++) {
+      for (let col = 0; col < boardSize; col++) {
+        const gem = current[row][col]
+        if (gem && !this.isPowerUpGem(gem)) movable.push(gem)
       }
     }
 
-    // Shuffle gems
-    for (let i = gems.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1))
-      ;[gems[i], gems[j]] = [gems[j], gems[i]]
-    }
+    let board: (Gem | null)[][] | null = null
+    for (let attempt = 0; attempt < maxAttempts && !board; attempt++) {
+      const pool = [...movable]
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[pool[i], pool[j]] = [pool[j], pool[i]]
+      }
 
-    // Place shuffled gems back
-    let gemIndex = 0
-    for (let row = 0; row < this.gameState.boardSize; row++) {
-      for (let col = 0; col < this.gameState.boardSize; col++) {
-        if (!this.isPowerUpGem(this.gameState.board[row][col])) {
-          if (gemIndex < gems.length) {
-            const gem = gems[gemIndex]
-            gem.row = row
-            gem.col = col
-            this.gameState.board[row][col] = gem
-            gemIndex++
+      // Place gems one by one, skipping any that would complete a match
+      const candidate: (Gem | null)[][] = current.map(line => line.map(gem => (this.isPowerUpGem(gem) ? gem : null)))
+      let complete = true
+      for (let row = 0; row < boardSize && complete; row++) {
+        for (let col = 0; col < boardSize && complete; col++) {
+          if (!current[row][col] || this.isPowerUpGem(current[row][col])) continue
+          const pick = pool.findIndex(gem => !this.wouldCreateMatch(candidate, row, col, gem.type))
+          if (pick === -1) {
+            complete = false
+            break
           }
+          candidate[row][col] = { ...pool.splice(pick, 1)[0], row, col }
         }
+      }
+
+      if (complete && !this.hasInitialMatches(candidate) && this.hasPossibleMoves(candidate)) {
+        board = candidate
       }
     }
 
-    // Ensure the reshuffled board has possible moves
-    if (!this.hasPossibleMoves(this.gameState.board)) {
-      this.forcePossibleMove(this.gameState.board)
-    }
-
+    this.gameState.board = board ?? this.createValidBoard(boardSize)
     this.emit('board:reshuffled')
-    this.emit('game:board-changed', this.gameState.board)
+    this.emit('game:board-changed', this.getGameState())
   }
 
   // Check level completion
