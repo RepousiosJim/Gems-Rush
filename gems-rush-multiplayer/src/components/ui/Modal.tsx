@@ -31,10 +31,10 @@ interface ModalProps {
   icon: LucideIcon
   subtitle?: string
   children: React.ReactNode
-  size?: 'md' | 'lg' | 'xl'
+  size?: 'md' | 'lg'
 }
 
-function Modal({ isOpen, onClose, title, icon: Icon, subtitle, children, size = 'md' }: ModalProps) {
+export function Modal({ isOpen, onClose, title, icon: Icon, subtitle, children, size = 'md' }: ModalProps) {
   const modalRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -62,7 +62,7 @@ function Modal({ isOpen, onClose, title, icon: Icon, subtitle, children, size = 
     }
   }, [isOpen])
 
-  const sizeClass = size === 'lg' ? 'max-w-3xl' : size === 'xl' ? 'max-w-4xl' : 'max-w-lg'
+  const sizeClass = size === 'lg' ? 'max-w-3xl' : 'max-w-lg'
 
   const handleOverlayClick = (event: React.MouseEvent) => {
     if (event.target === event.currentTarget) onClose()
@@ -75,7 +75,7 @@ function Modal({ isOpen, onClose, title, icon: Icon, subtitle, children, size = 
           initial={{ opacity: 0 }}
           animate={{ opacity: 1 }}
           exit={{ opacity: 0 }}
-          className="fixed inset-0 z-50 flex items-center justify-center bg-ink/80 backdrop-blur-sm p-4"
+          className="fixed inset-0 z-50 flex items-end justify-center bg-ink/80 backdrop-blur-sm sm:items-start sm:p-4 sm:pt-[8vh]"
           onClick={handleOverlayClick}
         >
           <motion.div
@@ -84,7 +84,7 @@ function Modal({ isOpen, onClose, title, icon: Icon, subtitle, children, size = 
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 8 }}
             transition={{ duration: 0.2 }}
-            className={`card w-full ${sizeClass} max-h-[90vh] overflow-hidden flex flex-col`}
+            className={`card w-full ${sizeClass} max-h-[85dvh] overflow-hidden flex flex-col rounded-b-none border-b-0 sm:max-h-[calc(100dvh-8vh-2rem)] sm:rounded-b-2xl sm:border-b`}
             onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between px-6 py-4 border-b border-line">
@@ -110,16 +110,45 @@ function Modal({ isOpen, onClose, title, icon: Icon, subtitle, children, size = 
   )
 }
 
+export function ModalTabs<T extends string>({
+  tabs,
+  active,
+  onChange,
+}: {
+  tabs: readonly { id: T; label: string; icon: LucideIcon }[]
+  active: T
+  onChange: (id: T) => void
+}) {
+  return (
+    <div className="-mx-6 flex overflow-x-auto border-b border-line px-6">
+      {tabs.map((tab) => (
+        <button
+          key={tab.id}
+          onClick={() => onChange(tab.id)}
+          className={`flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+            active === tab.id
+              ? 'border-violet bg-surface-2 text-fg'
+              : 'border-transparent text-fg-muted hover:bg-surface-2/60 hover:text-fg'
+          }`}
+        >
+          <tab.icon size={16} />
+          {tab.label}
+        </button>
+      ))}
+    </div>
+  )
+}
+
 // Game Guide Modal Component
 export function GameGuideModal({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) {
-  const [activeTab, setActiveTab] = useState('basics')
+  const [activeTab, setActiveTab] = useState<'basics' | 'gems' | 'powerups' | 'modes'>('basics')
 
   const tabs = [
     { id: 'basics', label: 'Basics', icon: Target },
     { id: 'gems', label: 'Gems', icon: Sparkles },
     { id: 'powerups', label: 'Power-ups', icon: Zap },
     { id: 'modes', label: 'Game Modes', icon: Gamepad2 },
-  ]
+  ] as const
 
   const gems = [
     { name: 'Fire Gem', desc: 'Passion & energy', icon: Flame },
@@ -147,27 +176,9 @@ export function GameGuideModal({ isOpen, onClose }: { isOpen: boolean; onClose: 
   ]
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Game Guide" icon={Target} size="xl">
+    <Modal isOpen={isOpen} onClose={onClose} title="Game Guide" icon={Target} size="lg">
       <div className="flex flex-col gap-5">
-        <div className="flex flex-wrap gap-1 border-b border-line pb-3">
-          {tabs.map((tab) => {
-            const TabIcon = tab.icon
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition-colors ${
-                  activeTab === tab.id
-                    ? 'bg-surface-2 text-fg'
-                    : 'text-fg-muted hover:bg-surface-2/60'
-                }`}
-              >
-                <TabIcon size={16} />
-                <span className="font-medium">{tab.label}</span>
-              </button>
-            )
-          })}
-        </div>
+        <ModalTabs tabs={tabs} active={activeTab} onChange={setActiveTab} />
 
         <div>
           {activeTab === 'basics' && (
@@ -296,7 +307,7 @@ export function CreditsModal({ isOpen, onClose }: { isOpen: boolean; onClose: ()
   ]
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} title="Credits" icon={Users} size="lg">
+    <Modal isOpen={isOpen} onClose={onClose} title="Credits" icon={Users}>
       <div className="space-y-6">
         <div className="text-center">
           <h3 className="text-xl font-bold text-fg mb-1">Gems Rush</h3>
