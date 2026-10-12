@@ -32,8 +32,6 @@ export default function GameBoard({
   const swapDrag = useSwapDrag(gameState.board)
 
   const gemSize = Math.floor((size - PADDING * 2 - GAP * (GRID - 1)) / GRID)
-  // The gem slot must fit inside its cell
-  const gemSlot = gemSize < 48 ? 'sm' : gemSize < 64 ? 'md' : 'lg'
   const center = (index: number) => index * (gemSize + GAP) + gemSize / 2
 
   const handleGemClick = useCallback((row: number, col: number) => {
@@ -126,7 +124,7 @@ export default function GameBoard({
                   onClick={() => handleGemClick(rowIndex, colIndex)}
                   onSwipe={(dRow, dCol) => handleGemSwipe(rowIndex, colIndex, dRow, dCol)}
                   disabled={disabled}
-                  size={gemSlot}
+                  size={gemSize}
                 />
               </div>
             )

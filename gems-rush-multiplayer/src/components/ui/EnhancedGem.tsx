@@ -18,16 +18,9 @@ interface EnhancedGemProps {
   // Drag past the threshold swaps with the neighbour in that direction
   onSwipe?: (dRow: number, dCol: number) => void
   disabled?: boolean
-  size?: 'sm' | 'md' | 'lg'
+  // Slot edge in px; the board passes its cell size so the gem fills the cell
+  size: number
 }
-
-const SLOT_CLASSES = {
-  sm: 'w-10 h-10',
-  md: 'w-12 h-12',
-  lg: 'w-16 h-16'
-}
-
-const ICON_SIZES = { sm: 36, md: 43, lg: 58 }
 
 const SWIPE_THRESHOLD_PX = 16
 
@@ -107,7 +100,7 @@ export default function EnhancedGem({
   onClick,
   onSwipe,
   disabled = false,
-  size = 'md'
+  size
 }: EnhancedGemProps) {
   const drag = useRef<{ x: number; y: number; reach: number; active: boolean; swiped: boolean } | null>(null)
   const shared = useContext(SwapDragContext)!
@@ -116,7 +109,7 @@ export default function EnhancedGem({
   const [dragging, setDragging] = useState(false)
 
   if (!gem) {
-    return <div className={cn('rounded-lg bg-ink/40', SLOT_CLASSES[size])} />
+    return <div className="rounded-lg bg-ink/40" style={{ width: size, height: size }} />
   }
 
   const variant = isMatched
@@ -197,12 +190,12 @@ export default function EnhancedGem({
       className={cn(
         'relative flex touch-none select-none items-center justify-center rounded-lg bg-ink/40',
         dragging && 'z-20',
-        SLOT_CLASSES[size],
         isSelected && 'bg-gold/15 ring-2 ring-gold shadow-[0_0_14px_rgba(245,196,81,0.55)]',
         isHinted && !isSelected && 'bg-violet/15 ring-2 ring-violet',
         isAdjacent && !isSelected && !isHinted && 'ring-1 ring-line-strong',
         disabled ? 'cursor-not-allowed opacity-60' : 'cursor-pointer'
       )}
+      style={{ width: size, height: size }}
       whileTap={disabled ? undefined : { scale: 0.94 }}
     >
       {isHinted && !isSelected && (
@@ -214,7 +207,7 @@ export default function EnhancedGem({
       )}
       <motion.span className="flex" style={{ x: offsetX, y: offsetY }}>
         <motion.span className="flex" variants={gemVariants} animate={variant}>
-          <GemIcon type={gem.type} size={ICON_SIZES[size]} powerUp={gem.powerUpType} />
+          <GemIcon type={gem.type} size={Math.round(size * 0.9)} powerUp={gem.powerUpType} />
         </motion.span>
       </motion.span>
     </motion.button>

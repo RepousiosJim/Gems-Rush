@@ -38,6 +38,13 @@ interface GameInterfaceProps {
 // At or below this many moves left the counter turns urgent
 const URGENT_MOVES = 5
 
+const GRID = 8
+const BOARD_GAP = 4
+// Matches the board card's p-3
+const BOARD_PAD = 12
+// The card's 1px border sits outside the padding box that absolute overlays use
+const BOARD_BORDER = 1
+
 // Separate component to avoid provider nesting issues
 const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPause, onShowMenu, onShowSettings, onShowHint, currentHint, rewards, bonusScore, onSkipBonus, disabled }: GameInterfaceProps): ReactElement => {
   const [selectedGem, setSelectedGem] = useState<{ row: number; col: number } | null>(null)
@@ -94,11 +101,10 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
     return Math.max(320, sizes[quality] || 450) // Minimum 320px
   }, [quality])
 
-  // Optimized gem size calculation with better spacing
-  const gemSize = useMemo(() => {
-    const baseSize = Math.floor((boardSize - 32) / 8) // Account for padding and gaps
-    return Math.max(32, baseSize) // Minimum 32px per gem
-  }, [boardSize])
+  // Cells are exactly gemSize wide, so the card is sized from them and nothing clips
+  const gemSize = Math.floor((boardSize - 2 * (BOARD_PAD + BOARD_BORDER) - BOARD_GAP * (GRID - 1)) / GRID)
+  const boardOuter = GRID * gemSize + BOARD_GAP * (GRID - 1) + 2 * (BOARD_PAD + BOARD_BORDER)
+  const cellOffset = (index: number) => BOARD_PAD + index * (gemSize + BOARD_GAP)
 
   // Optimized adjacent positions calculation
   const getAdjacentPositions = useCallback((row: number, col: number) => {
@@ -125,8 +131,8 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
         matchedPositions.forEach((pos, index) => {
           if (boardRef.current) {
             const rect = boardRef.current.getBoundingClientRect()
-            const x = rect.left + (pos.col * (gemSize + 4)) + gemSize / 2 + 16
-            const y = rect.top + (pos.row * (gemSize + 4)) + gemSize / 2 + 16
+            const x = rect.left + BOARD_BORDER + cellOffset(pos.col) + gemSize / 2
+            const y = rect.top + BOARD_BORDER + cellOffset(pos.row) + gemSize / 2
 
             setTimeout(() => {
               addEffect({
@@ -230,7 +236,7 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
           onClick={() => handleGemClick(row, col)}
           onSwipe={(dRow, dCol) => handleGemSwipe(row, col, dRow, dCol)}
           disabled={disabled && gameState.gameStatus !== 'bonus'}
-          size={gemSize < 40 ? 'sm' : gemSize < 60 ? 'md' : 'lg'}
+          size={gemSize}
         />
 
         {/* Hint dots */}
@@ -461,8 +467,15 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
       <div className="flex flex-col items-center gap-4 px-4 py-4">
         <motion.div
           ref={boardRef}
-          className="card grid grid-cols-8 gap-1 bg-ink-2 p-3 relative"
-          style={{ width: boardSize, height: boardSize }}
+          className="card grid bg-ink-2 relative"
+          style={{
+            width: boardOuter,
+            height: boardOuter,
+            padding: BOARD_PAD,
+            gap: BOARD_GAP,
+            gridTemplateColumns: `repeat(${GRID}, ${gemSize}px)`,
+            gridAutoRows: `${gemSize}px`
+          }}
           initial={{ scale: 0.98, opacity: 0 }}
           animate={{ scale: 1, opacity: 1 }}
           transition={{ duration: 0.25, delay: 0.1 }}
@@ -476,10 +489,10 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
               transition={{ delay: 0.4 }}
             >
               <motion.line
-                x1={16 + currentHint.from.col * (gemSize + 4) + gemSize / 2}
-                y1={16 + currentHint.from.row * (gemSize + 4) + gemSize / 2}
-                x2={16 + currentHint.to.col * (gemSize + 4) + gemSize / 2}
-                y2={16 + currentHint.to.row * (gemSize + 4) + gemSize / 2}
+                x1={cellOffset(currentHint.from.col) + gemSize / 2}
+                y1={cellOffset(currentHint.from.row) + gemSize / 2}
+                x2={cellOffset(currentHint.to.col) + gemSize / 2}
+                y2={cellOffset(currentHint.to.row) + gemSize / 2}
                 stroke="var(--color-violet)"
                 strokeWidth="3"
                 strokeDasharray="10 5"
@@ -507,8 +520,8 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
                 key={block.id}
                 className="absolute pointer-events-none"
                 style={{
-                  left: 16 + block.col * (gemSize + 4),
-                  top: 16 + block.row * (gemSize + 4),
+                  left: cellOffset(block.col),
+                  top: cellOffset(block.row),
                   zIndex: 10
                 }}
               >
