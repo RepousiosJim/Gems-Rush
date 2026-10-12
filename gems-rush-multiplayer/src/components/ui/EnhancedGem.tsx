@@ -1,5 +1,6 @@
 'use client'
 
+import { useRef } from 'react'
 import { motion, Variants } from 'framer-motion'
 import { Gem } from '@/types/game'
 import { cn } from '@/lib/utils'
@@ -14,6 +15,8 @@ interface EnhancedGemProps {
   isHinted?: boolean
   isMatched?: boolean
   onClick: () => void
+  // Drag past the threshold swaps with the neighbour in that direction
+  onSwipe?: (dRow: number, dCol: number) => void
   disabled?: boolean
   size?: 'sm' | 'md' | 'lg'
 }
@@ -25,6 +28,8 @@ const SLOT_CLASSES = {
 }
 
 const ICON_SIZES = { sm: 36, md: 43, lg: 58 }
+
+const SWIPE_THRESHOLD_PX = 16
 
 const gemVariants: Variants = {
   default: { scale: 1, y: 0, opacity: 1, filter: 'brightness(1)' },
@@ -52,9 +57,12 @@ export default function EnhancedGem({
   isHinted = false,
   isMatched = false,
   onClick,
+  onSwipe,
   disabled = false,
   size = 'md'
 }: EnhancedGemProps) {
+  const drag = useRef<{ x: number; y: number; swiped: boolean } | null>(null)
+
   if (!gem) {
     return <div className={cn('rounded-lg bg-ink/40', SLOT_CLASSES[size])} />
   }
@@ -69,10 +77,30 @@ export default function EnhancedGem({
 
   return (
     <motion.button
-      onClick={onClick}
+      onPointerDown={e => {
+        if (disabled || !onSwipe) return
+        drag.current = { x: e.clientX, y: e.clientY, swiped: false }
+        e.currentTarget.setPointerCapture(e.pointerId)
+      }}
+      onPointerMove={e => {
+        const start = drag.current
+        if (!start || start.swiped) return
+        const dx = e.clientX - start.x
+        const dy = e.clientY - start.y
+        if (Math.max(Math.abs(dx), Math.abs(dy)) < SWIPE_THRESHOLD_PX) return
+        start.swiped = true
+        if (Math.abs(dx) > Math.abs(dy)) onSwipe!(0, Math.sign(dx))
+        else onSwipe!(Math.sign(dy), 0)
+      }}
+      onClick={() => {
+        // The click that ends a swipe is not a tap
+        const swiped = drag.current?.swiped
+        drag.current = null
+        if (!swiped) onClick()
+      }}
       disabled={disabled}
       className={cn(
-        'relative flex items-center justify-center rounded-lg bg-ink/40',
+        'relative flex touch-none select-none items-center justify-center rounded-lg bg-ink/40',
         SLOT_CLASSES[size],
         isSelected && 'bg-gold/15 ring-2 ring-gold shadow-[0_0_14px_rgba(245,196,81,0.55)]',
         isHinted && !isSelected && 'bg-violet/15 ring-2 ring-violet',

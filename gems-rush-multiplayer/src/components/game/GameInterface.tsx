@@ -193,6 +193,17 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
     }
   }, [selectedGem, adjacentGems, disabled, gameState.board, onMove, getAdjacentPositions, handleMatchDetection])
 
+  const handleGemSwipe = useCallback((row: number, col: number, dRow: number, dCol: number) => {
+    const toRow = row + dRow
+    const toCol = col + dCol
+    if (disabled || !gameState.board[row]?.[col] || !gameState.board[toRow]?.[toCol]) return
+
+    onMove(row, col, toRow, toCol)
+    handleMatchDetection([{ row, col }, { row: toRow, col: toCol }])
+    setSelectedGem(null)
+    setAdjacentGems([])
+  }, [disabled, gameState.board, onMove, handleMatchDetection])
+
   // Enhanced gem rendering with hint highlighting
   const renderGemWithEffects = useCallback((gem: Gem | null, row: number, col: number) => {
     const isSelected = selectedGem?.row === row && selectedGem?.col === col
@@ -216,6 +227,7 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
           isHinted={isHinted}
           isMatched={!!gem?.isMatched}
           onClick={() => handleGemClick(row, col)}
+          onSwipe={(dRow, dCol) => handleGemSwipe(row, col, dRow, dCol)}
           disabled={disabled && gameState.gameStatus !== 'bonus'}
           size={gemSize < 40 ? 'sm' : gemSize < 60 ? 'md' : 'lg'}
         />
@@ -260,7 +272,7 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
         )}
       </div>
     )
-  }, [selectedGem, adjacentGems, currentHint, disabled, gameState.gameStatus, handleGemClick, gemSize])
+  }, [selectedGem, adjacentGems, currentHint, disabled, gameState.gameStatus, handleGemClick, handleGemSwipe, gemSize])
 
   // A cascade is every extra match the engine resolved after the first one in a move
   useEffect(() => {

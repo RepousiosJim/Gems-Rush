@@ -63,6 +63,15 @@ export default function GameBoard({
     }
   }, [disabled, gameState.board, selectedGem, onMove, onPowerUpClick])
 
+  const handleGemSwipe = useCallback((row: number, col: number, dRow: number, dCol: number) => {
+    const toRow = row + dRow
+    const toCol = col + dCol
+    if (disabled || !gameState.board[row]?.[col] || !gameState.board[toRow]?.[toCol]) return
+
+    onMove(row, col, toRow, toCol)
+    setSelectedGem(null)
+  }, [disabled, gameState.board, onMove])
+
   return (
     <div className="card bg-ink-2 p-2" style={{ width: size, height: size }}>
       <div
@@ -113,6 +122,7 @@ export default function GameBoard({
                   isSelected={selectedGem?.row === rowIndex && selectedGem?.col === colIndex}
                   isHinted={isHinted}
                   onClick={() => handleGemClick(rowIndex, colIndex)}
+                  onSwipe={(dRow, dCol) => handleGemSwipe(rowIndex, colIndex, dRow, dCol)}
                   disabled={disabled}
                   size={gemSlot}
                 />
