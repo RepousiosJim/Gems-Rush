@@ -46,7 +46,8 @@ export interface GameState {
   moves: number
   targetScore: number
   timeRemaining?: number
-  gameStatus: 'idle' | 'playing' | 'paused' | 'completed' | 'failed'
+  // bonus: goal met, leftover moves are being spent as power-ups before the win screen
+  gameStatus: 'idle' | 'playing' | 'paused' | 'bonus' | 'completed' | 'failed'
   gameMode: 'normal' | 'timeAttack' | 'dailyChallenge' | 'campaign' | 'stage'
   
   // Round rules owned by the page: what wins, how many moves, what has been cleared so far

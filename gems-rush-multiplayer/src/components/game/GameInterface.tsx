@@ -2,14 +2,17 @@
 
 import { useState, useRef, useCallback, useMemo, useEffect, ReactElement } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Home, Settings, Pause, Play, RotateCcw, Lightbulb, ArrowRight } from 'lucide-react'
+import { Home, Settings, Pause, Play, RotateCcw, Lightbulb, ArrowRight, Check } from 'lucide-react'
 import { Gem, GameState } from '@/types/game'
 import EnhancedGem from '@/components/ui/EnhancedGem'
 import ObstacleBlockComponent from '@/components/ui/ObstacleBlock'
 import WinScreen from '@/components/ui/WinScreen'
+import LoseScreen from '@/components/ui/LoseScreen'
+import GemIcon from '@/components/ui/GemIcon'
 import { VisualEffectsProvider, useVisualEffects } from '@/components/ui/VisualEffectsManager'
 import { usePerformanceOptimization } from '@/hooks/usePerformanceOptimization'
 import { stageSystem } from '@/lib/game/StageSystem'
+import { goalProgress, stillNeeded } from '@/lib/game/goals'
 
 // Simple className utility function
 const cn = (...classes: (string | undefined | null | false)[]): string => {
@@ -27,11 +30,16 @@ interface GameInterfaceProps {
   onShowHint?: () => void
   currentHint?: { from: { row: number; col: number }; to: { row: number; col: number } } | null
   rewards?: { coins: number; gems: number; xp: number; stars: number }
+  bonusScore: number
+  onSkipBonus: () => void
   disabled?: boolean
 }
 
+// At or below this many moves left the counter turns urgent
+const URGENT_MOVES = 5
+
 // Separate component to avoid provider nesting issues
-const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPause, onShowMenu, onShowSettings, onShowHint, currentHint, rewards, disabled }: GameInterfaceProps): ReactElement => {
+const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPause, onShowMenu, onShowSettings, onShowHint, currentHint, rewards, bonusScore, onSkipBonus, disabled }: GameInterfaceProps): ReactElement => {
   const [selectedGem, setSelectedGem] = useState<{ row: number; col: number } | null>(null)
   const [adjacentGems, setAdjacentGems] = useState<{ row: number; col: number }[]>([])
   const [chains, setChains] = useState<number>(0)
@@ -208,7 +216,7 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
           isHinted={isHinted}
           isMatched={!!gem?.isMatched}
           onClick={() => handleGemClick(row, col)}
-          disabled={disabled}
+          disabled={disabled && gameState.gameStatus !== 'bonus'}
           size={gemSize < 40 ? 'sm' : gemSize < 60 ? 'md' : 'lg'}
         />
 
@@ -252,7 +260,7 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
         )}
       </div>
     )
-  }, [selectedGem, adjacentGems, currentHint, disabled, handleGemClick, gemSize])
+  }, [selectedGem, adjacentGems, currentHint, disabled, gameState.gameStatus, handleGemClick, gemSize])
 
   // A cascade is every extra match the engine resolved after the first one in a move
   useEffect(() => {
@@ -262,7 +270,12 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
   }, [gameState.moves, gameState.comboMultiplier])
 
   const isStageMode = gameState.gameMode === 'stage'
-  const progressPct = Math.round((gameState.score / gameState.targetScore) * 100)
+  const goal = gameState.goal!
+  const collected = gameState.collected!
+  const progressPct = Math.round(goalProgress(goal, gameState.score, collected) * 100)
+  const movesLeft = gameState.maxMoves === undefined ? null : gameState.maxMoves - gameState.moves
+  const inBonus = gameState.gameStatus === 'bonus'
+  const urgent = movesLeft !== null && movesLeft <= URGENT_MOVES && gameState.gameStatus === 'playing'
 
   return (
     <div className="min-h-screen bg-ink page-glow relative">
@@ -335,29 +348,67 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
         transition={{ duration: 0.25, delay: 0.05 }}
       >
         <div className={cn('grid gap-4 text-center', isStageMode ? 'grid-cols-3 sm:grid-cols-5' : 'grid-cols-2 sm:grid-cols-4')}>
+          <div data-testid="goal">
+            <div className="stat-label">{goal.kind === 'score' ? 'Target' : 'Collect'}</div>
+            {goal.kind === 'score' ? (
+              <>
+                <div className="stat-value text-fg">{goal.target.toLocaleString()}</div>
+                <div className="text-xs text-fg-dim">
+                  {Math.max(0, goal.target - gameState.score).toLocaleString()} to go
+                </div>
+              </>
+            ) : (
+              <div className="mt-1 flex items-center justify-center gap-3">
+                {stillNeeded(goal, collected).map(([type, left]) => (
+                  <div key={type} className="flex items-center gap-1" data-testid={`goal-${type}`} data-left={left}>
+                    <motion.div
+                      key={`icon-${left}`}
+                      initial={{ scale: 1.35 }}
+                      animate={{ scale: 1 }}
+                      transition={{ type: 'spring', stiffness: 500, damping: 15 }}
+                    >
+                      <GemIcon type={type} size={26} />
+                    </motion.div>
+                    {left === 0 ? (
+                      <Check size={22} className="text-good" aria-label="done" />
+                    ) : (
+                      <motion.span
+                        key={`count-${left}`}
+                        className="stat-value"
+                        initial={{ scale: 1.6, color: 'var(--color-gold)' }}
+                        animate={{ scale: 1, color: 'var(--color-fg)' }}
+                        transition={{ duration: 0.35 }}
+                      >
+                        {left}
+                      </motion.span>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          <div
+            data-testid="moves"
+            data-urgent={urgent}
+            className={cn('rounded-lg transition-colors duration-300', urgent && 'bg-bad/15 ring-1 ring-bad/60')}
+          >
+            <div className={cn('stat-label', urgent && 'text-bad')}>{movesLeft === null ? 'Moves' : 'Moves left'}</div>
+            <motion.div
+              className={cn('stat-value', inBonus ? 'text-gold' : urgent ? 'text-bad' : 'text-fg')}
+              animate={urgent ? { scale: [1, 1.2, 1] } : { scale: 1 }}
+              transition={urgent ? { duration: movesLeft! <= 2 ? 0.5 : 0.8, repeat: Infinity } : { duration: 0.2 }}
+            >
+              {movesLeft ?? gameState.moves}
+            </motion.div>
+          </div>
+
           <div>
             <div className="stat-label">Score</div>
             <div className="stat-value text-gold">{gameState.score.toLocaleString()}</div>
             {gameState.lastMoveScore > 0 && (
               <div className="text-xs text-good font-semibold">+{gameState.lastMoveScore}</div>
             )}
-          </div>
-
-          <div>
-            <div className="stat-label">Target</div>
-            <div className="stat-value text-fg">{gameState.targetScore.toLocaleString()}</div>
-            <div className="text-xs text-fg-dim">
-              {Math.max(0, gameState.targetScore - gameState.score).toLocaleString()} to go
-            </div>
-          </div>
-
-          <div>
-            <div className="stat-label">Moves</div>
-            <div className="stat-value text-fg">
-              {isStageMode && gameState.currentStage
-                ? `${gameState.moves}/${stageSystem.getStage(gameState.currentStage)?.maxMoves ?? '∞'}`
-                : gameState.moves}
-            </div>
           </div>
 
           <div>
@@ -379,7 +430,7 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
 
         <div className="mt-4">
           <div className="flex justify-between text-xs text-fg-muted mb-1">
-            <span>Target</span>
+            <span>Goal</span>
             <span>{progressPct}%</span>
           </div>
           <div className="h-1.5 w-full overflow-hidden rounded-full bg-ink-2">
@@ -456,62 +507,60 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
           })}
         </motion.div>
 
-        {/* Controls */}
-        <motion.div
-          className="flex flex-wrap justify-center gap-3"
-          initial={{ y: 8, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ duration: 0.25, delay: 0.15 }}
-        >
-          <button onClick={onRestart} className="btn btn-secondary">
-            <RotateCcw size={18} />
-            <span className="hidden sm:inline">Restart</span>
-          </button>
-
-          {onShowHint && quality !== 'minimal' && (
-            <button onClick={onShowHint} disabled={disabled} className="btn btn-secondary">
-              <Lightbulb size={18} />
-              <span className="hidden sm:inline">Hint</span>
+        {/* Controls; the bonus banner takes their place during the end cascade */}
+        {!inBonus && (
+          <motion.div
+            className="flex flex-wrap justify-center gap-3"
+            initial={{ y: 8, opacity: 0 }}
+            animate={{ y: 0, opacity: 1 }}
+            transition={{ duration: 0.25, delay: 0.15 }}
+          >
+            <button onClick={onRestart} className="btn btn-secondary">
+              <RotateCcw size={18} />
+              <span className="hidden sm:inline">Restart</span>
             </button>
-          )}
 
-          {onNextLevel && gameState.gameStatus === 'completed' && (
-            <button onClick={onNextLevel} className="btn btn-primary">
-              <span>Next level</span>
-            </button>
-          )}
-        </motion.div>
+            {onShowHint && quality !== 'minimal' && (
+              <button onClick={onShowHint} disabled={disabled} className="btn btn-secondary">
+                <Lightbulb size={18} />
+                <span className="hidden sm:inline">Hint</span>
+              </button>
+            )}
 
-        {/* Failed state */}
-        <AnimatePresence>
-          {gameState.gameStatus === 'failed' && (
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -12 }}
-              className="card max-w-md p-6 text-center"
-            >
-              <div className="text-2xl font-bold text-bad mb-2">Out of moves</div>
-              <div className="text-fg-muted mb-4">Not enough score to clear this level</div>
-              <div className="text-lg font-semibold text-fg mb-4">
-                Score: {gameState.score.toLocaleString()} / {gameState.targetScore.toLocaleString()}
-              </div>
-              <div className="flex justify-center gap-3">
-                <button onClick={onRestart} className="btn btn-primary">
-                  <RotateCcw size={18} />
-                  <span>Restart</span>
-                </button>
-                {onShowMenu && (
-                  <button onClick={onShowMenu} className="btn btn-secondary">
-                    <Home size={18} />
-                    <span>Menu</span>
-                  </button>
-                )}
-              </div>
-            </motion.div>
-          )}
-        </AnimatePresence>
+            {onNextLevel && gameState.gameStatus === 'completed' && (
+              <button onClick={onNextLevel} className="btn btn-primary">
+                <span>Next level</span>
+              </button>
+            )}
+          </motion.div>
+        )}
+
       </div>
+
+      {gameState.gameStatus === 'failed' && <LoseScreen gameState={gameState} onRetry={onRestart} onMainMenu={onShowMenu} />}
+
+      {/* End cascade: leftover moves turning into score; a tap anywhere skips ahead */}
+      {inBonus && (
+        <button
+          className="fixed inset-0 z-40 flex cursor-pointer flex-col items-center justify-end pb-5"
+          onClick={onSkipBonus}
+          aria-label="Skip bonus"
+        >
+          <div className="card flex items-center gap-3 px-5 py-2" data-testid="bonus-banner">
+            <div className="stat-label">Moves bonus</div>
+            <motion.div
+              key={bonusScore}
+              className="text-2xl font-bold tabular-nums text-gold"
+              initial={{ scale: 1.4 }}
+              animate={{ scale: 1 }}
+              transition={{ type: 'spring', stiffness: 500, damping: 18 }}
+            >
+              +{bonusScore.toLocaleString()}
+            </motion.div>
+            <div className="text-xs text-fg-dim">Tap to skip</div>
+          </div>
+        </button>
+      )}
 
       {/* Win Screen Modal */}
       <WinScreen
@@ -530,6 +579,7 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
         onRestart={onRestart}
         showRewards={true}
         rewards={rewards}
+        bonusScore={bonusScore}
       />
 
       {/* Performance indicator (debug) */}

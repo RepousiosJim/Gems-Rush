@@ -19,14 +19,8 @@ interface WinScreenProps {
     xp: number
     stars: number
   }
-}
-
-interface ScoreBreakdown {
-  baseScore: number
-  comboBonus: number
-  timeBonus: number
-  perfectionBonus: number
-  total: number
+  // Score earned by the end-of-level cascade, already included in gameState.score
+  bonusScore?: number
 }
 
 export default function WinScreen({
@@ -36,42 +30,16 @@ export default function WinScreen({
   onMainMenu,
   onRestart,
   showRewards = true,
-  rewards = { coins: 100, gems: 5, xp: 50, stars: 3 }
+  rewards = { coins: 100, gems: 5, xp: 50, stars: 3 },
+  bonusScore = 0
 }: WinScreenProps) {
-  const [showBreakdown, setShowBreakdown] = useState(false)
   const [animationPhase, setAnimationPhase] = useState<'celebrating' | 'rewards' | 'options'>('celebrating')
   const [displayedScore, setDisplayedScore] = useState(0)
   const [displayedCoins, setDisplayedCoins] = useState(0)
   const [displayedGems, setDisplayedGems] = useState(0)
   const [displayedXP, setDisplayedXP] = useState(0)
 
-  // Calculate score breakdown
-  const calculateScoreBreakdown = (): ScoreBreakdown => {
-    const baseScore = Math.floor(gameState.score * 0.7)
-    const comboBonus = Math.floor(gameState.score * 0.2)
-    const timeBonus = gameState.gameMode === 'timeAttack' ? Math.floor(gameState.score * 0.1) : 0
-    const perfectionBonus = gameState.moves <= 10 ? Math.floor(gameState.score * 0.15) : 0
-
-    return {
-      baseScore,
-      comboBonus,
-      timeBonus,
-      perfectionBonus,
-      total: gameState.score
-    }
-  }
-
-  const scoreBreakdown = calculateScoreBreakdown()
-
-  // Calculate star rating based on performance
-  const calculateStars = (): number => {
-    const scoreRatio = gameState.score / gameState.targetScore
-    if (scoreRatio >= 2.5) return 3
-    if (scoreRatio >= 1.8) return 2
-    return 1
-  }
-
-  const earnedStars = calculateStars()
+  const earnedStars = rewards.stars
 
   // Animated number counter
   useEffect(() => {
@@ -224,51 +192,14 @@ export default function WinScreen({
                 <div className="card bg-ink-2 p-5">
                   <div className="stat-label mb-1">Final score</div>
                   <div className="stat-value text-3xl text-gold">{displayedScore.toLocaleString()}</div>
-                  <div className="text-xs text-fg-dim mt-1">
-                    Target: {gameState.targetScore.toLocaleString()}
-                    <span className="text-good ml-2">
-                      (+{Math.round(((gameState.score / gameState.targetScore) - 1) * 100)}%)
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={() => setShowBreakdown(!showBreakdown)}
-                    className="mt-3 text-violet text-xs underline"
-                  >
-                    {showBreakdown ? 'Hide' : 'Show'} score breakdown
-                  </button>
-
-                  <AnimatePresence>
-                    {showBreakdown && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="overflow-hidden space-y-1.5 pt-3 mt-3 border-t border-line text-left"
-                      >
-                        <div className="flex justify-between text-xs">
-                          <span className="text-fg-muted">Base score</span>
-                          <span className="text-fg">{scoreBreakdown.baseScore.toLocaleString()}</span>
-                        </div>
-                        <div className="flex justify-between text-xs">
-                          <span className="text-fg-muted">Combo bonus</span>
-                          <span className="text-gold">{scoreBreakdown.comboBonus.toLocaleString()}</span>
-                        </div>
-                        {scoreBreakdown.timeBonus > 0 && (
-                          <div className="flex justify-between text-xs">
-                            <span className="text-fg-muted">Time bonus</span>
-                            <span className="text-good">{scoreBreakdown.timeBonus.toLocaleString()}</span>
-                          </div>
-                        )}
-                        {scoreBreakdown.perfectionBonus > 0 && (
-                          <div className="flex justify-between text-xs">
-                            <span className="text-fg-muted">Perfection bonus</span>
-                            <span className="text-violet">{scoreBreakdown.perfectionBonus.toLocaleString()}</span>
-                          </div>
-                        )}
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
+                  {gameState.goal?.kind === 'score' && (
+                    <div className="text-xs text-fg-dim mt-1">Target: {gameState.goal.target.toLocaleString()}</div>
+                  )}
+                  {bonusScore > 0 && (
+                    <div className="mt-2 text-sm font-semibold text-good" data-testid="win-bonus">
+                      Moves bonus +{bonusScore.toLocaleString()}
+                    </div>
+                  )}
                 </div>
 
                 {showRewards && (

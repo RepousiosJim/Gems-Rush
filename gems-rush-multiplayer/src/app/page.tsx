@@ -1,8 +1,8 @@
 'use client'
 
 import { useState, useEffect, useRef } from 'react'
-import { GameEngine, HintMove } from '@/lib/game/GameEngine'
-import { GameState } from '@/types/game'
+import { GameEngine, HintMove, PowerUpType } from '@/lib/game/GameEngine'
+import { Gem as GemModel, GameState } from '@/types/game'
 import { energyManager } from '@/lib/game/EnergySystem'
 import { dynamicContentManager } from '@/lib/game/DynamicContentSystem'
 import { stageSystem } from '@/lib/game/StageSystem'
@@ -20,6 +20,7 @@ import { Gem } from 'lucide-react'
 import { MotionConfig } from 'framer-motion'
 import { useSettings } from '@/lib/settings'
 import { levelForXp } from '@/lib/game/leveling'
+import { addCleared, classicLevel, roundStatus, starsForMovesLeft } from '@/lib/game/goals'
 
 function formatEventTimeLeft(endTime: number): string {
   const remaining = endTime - Date.now()
@@ -43,8 +44,18 @@ const classicRewards = (score: number): Rewards => ({
   xp: Math.floor(score / 5)
 })
 
+// Classic scores swing with the end-of-level bonus, so its rewards follow stars instead
+const levelRewards = (stars: number): Rewards => ({ coins: 50 + 30 * stars, gems: 3 * stars, xp: 100 + 50 * stars })
+
 const starsFor = (score: number, targetScore: number) =>
   score >= targetScore * 2.5 ? 3 : score >= targetScore * 1.8 ? 2 : 1
+
+const BONUS_POWER_UPS: PowerUpType[] = ['lightning', 'bomb', 'rainbow']
+// Each leftover move shows its power-up for BONUS_SHOW_MS, then the next follows BONUS_GAP_MS after the blast
+const BONUS_SHOW_MS = 160
+const BONUS_GAP_MS = 110
+
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms))
 
 const dateKey = (daysAgo = 0) => {
   const date = new Date()
@@ -166,6 +177,9 @@ export default function HomePage() {
 
   const [currentHint, setCurrentHint] = useState<{ from: { row: number; col: number }; to: { row: number; col: number } } | null>(null)
   const [winRewards, setWinRewards] = useState<(Rewards & { stars: number }) | null>(null)
+  // Score added by the end-of-level cascade, shown live and on the win screen
+  const [bonusScore, setBonusScore] = useState(0)
+  const skipBonusRef = useRef(false)
 
   const commitGameState = (next: GameState | null) => {
     gameStateRef.current = next
@@ -197,7 +211,7 @@ export default function HomePage() {
       if (current?.gameStatus !== 'playing') return
       const won: GameState = { ...current, score: current.targetScore, gameStatus: 'completed' }
       commitGameState(won)
-      winRound(won)
+      winRound(won, current.maxMoves! - current.moves)
     }
 
     window.addEventListener('debug-win-test', handleDebugWin)
@@ -343,6 +357,12 @@ export default function HomePage() {
       })
     })
 
+    engine.on('game:gems-cleared', (gems: GemModel[]) => {
+      const prev = gameStateRef.current
+      if (!prev) return
+      commitGameState({ ...prev, collected: addCleared(prev.collected!, gems) })
+    })
+
     engine.on('hint:show', (hint: HintMove) => {
       if (hintTimeoutRef.current) clearTimeout(hintTimeoutRef.current)
       setCurrentHint({ from: hint.from, to: hint.to })
@@ -415,7 +435,7 @@ export default function HomePage() {
     )
   }
 
-  const winRound = (state: GameState) => {
+  const winRound = (state: GameState, movesLeft: number) => {
     let rewards: Rewards & { stars: number }
     let patch: ((prev: UserStatsType) => Partial<UserStatsType>) | undefined
     if (state.gameMode === 'stage' && state.currentStage) {
@@ -423,20 +443,41 @@ export default function HomePage() {
     } else if (state.gameMode === 'dailyChallenge' && userStatsRef.current.lastDailyChallengeDate === dateKey()) {
       // The Daily Quest pays once per calendar day
       rewards = { ...NO_REWARDS, stars: starsFor(state.score, state.targetScore) }
-    } else {
+    } else if (state.gameMode === 'dailyChallenge') {
       rewards = { ...classicRewards(state.score), stars: starsFor(state.score, state.targetScore) }
-      if (state.gameMode === 'dailyChallenge') {
-        patch = prev => ({
-          dailyChallengeCompleted: true,
-          lastDailyChallengeDate: dateKey(),
-          streak: prev.lastDailyChallengeDate === dateKey(1) ? prev.streak + 1 : 1
-        })
-      }
+      patch = prev => ({
+        dailyChallengeCompleted: true,
+        lastDailyChallengeDate: dateKey(),
+        streak: prev.lastDailyChallengeDate === dateKey(1) ? prev.streak + 1 : 1
+      })
+    } else {
+      const stars = starsForMovesLeft(movesLeft, state.maxMoves!)
+      rewards = { ...levelRewards(stars), stars }
     }
 
     setWinRewards(rewards)
     settleRound(state.score, true, rewards, patch)
     disposeEngine()
+  }
+
+  // Leftover moves become power-ups that go off one by one; a tap skips the waits
+  const runEndCascade = async (engine: GameEngine, movesLeft: number) => {
+    const scoreAtGoal = gameStateRef.current!.score
+    skipBonusRef.current = false
+    setBonusScore(0)
+
+    for (let i = 0; i < movesLeft; i++) {
+      const { row, col } = engine.placePowerUp(BONUS_POWER_UPS[Math.floor(Math.random() * BONUS_POWER_UPS.length)])
+      if (!skipBonusRef.current) await wait(BONUS_SHOW_MS)
+      if (gameEngineRef.current !== engine) return
+      await engine.makeMove(row, col, row, col)
+      setBonusScore(gameStateRef.current!.score - scoreAtGoal)
+      if (!skipBonusRef.current) await wait(BONUS_GAP_MS)
+    }
+
+    const won: GameState = { ...gameStateRef.current!, gameStatus: 'completed' }
+    commitGameState(won)
+    winRound(won, movesLeft)
   }
 
   const failRound = (state: GameState) => {
@@ -459,12 +500,14 @@ export default function HomePage() {
       disposeEngine()
 
       const stageData = mode === 'stage' && stage ? stageSystem.getStage(stage) : null
+      const classic = mode === 'normal' ? classicLevel(level) : null
+      const targetScore = stageData?.targetScore ?? (classic?.goal.kind === 'score' ? classic.goal.target : undefined)
       const engine = new GameEngine(
         {
           level,
           gameMode: mode as GameState['gameMode'],
           currentStage: stage,
-          ...(stageData && { targetScore: stageData.targetScore })
+          ...(targetScore && { targetScore })
         },
         { autoComplete: false }
       )
@@ -473,7 +516,12 @@ export default function HomePage() {
 
       if (!transition) spendEnergy()
 
-      const initialGameState = engine.getGameState()
+      const initialGameState: GameState = {
+        ...engine.getGameState(),
+        goal: classic?.goal ?? { kind: 'score', target: engine.getGameState().targetScore },
+        maxMoves: classic?.moves ?? stageData?.maxMoves,
+        collected: {}
+      }
       if (stageData && stage) {
         initialGameState.obstacleBlocks = obstacleBlockManager.generateObstacleBlocks(
           stage,
@@ -485,6 +533,7 @@ export default function HomePage() {
       gameEngineRef.current = engine
       roundOpenRef.current = true
       setWinRewards(null)
+      setBonusScore(0)
       commitGameState(initialGameState)
       setAppState('game')
     } catch (error) {
@@ -632,20 +681,19 @@ export default function HomePage() {
 
       const next: GameState = { ...prev, matchesFound: result.matchesFound, obstacleBlocks, blocksDestroyed }
 
+      next.gameStatus = roundStatus(next.goal!, next.maxMoves, { ...next, collected: next.collected! })
+      // A stage also needs its blocks broken
       const stageData = next.gameMode === 'stage' && next.currentStage ? stageSystem.getStage(next.currentStage) : null
-      if (stageData) {
-        const cleared =
-          next.score >= stageData.targetScore &&
-          blocksDestroyed >= stageData.blocksToBreak &&
-          next.moves <= stageData.maxMoves
-        if (cleared) next.gameStatus = 'completed'
-        else if (next.moves >= stageData.maxMoves) next.gameStatus = 'failed'
-      } else if (next.score >= next.targetScore) {
-        next.gameStatus = 'completed'
+      if (stageData && blocksDestroyed < stageData.blocksToBreak && next.gameStatus === 'completed') {
+        next.gameStatus = next.moves >= stageData.maxMoves ? 'failed' : 'playing'
       }
 
+      const movesLeft = next.maxMoves === undefined ? 0 : next.maxMoves - next.moves
+      if (next.gameStatus === 'completed' && movesLeft > 0) next.gameStatus = 'bonus'
+
       commitGameState(next)
-      if (next.gameStatus === 'completed') winRound(next)
+      if (next.gameStatus === 'bonus') runEndCascade(engine, movesLeft)
+      else if (next.gameStatus === 'completed') winRound(next, movesLeft)
       else if (next.gameStatus === 'failed') failRound(next)
     }).catch(error => console.error('Move failed:', error))
   }
@@ -721,6 +769,8 @@ export default function HomePage() {
             onShowHint={settings.hints ? handleShowHint : undefined}
             currentHint={currentHint}
             rewards={winRewards ?? undefined}
+            bonusScore={bonusScore}
+            onSkipBonus={() => (skipBonusRef.current = true)}
             disabled={gameState.gameStatus !== 'playing'}
           />
         
