@@ -64,6 +64,9 @@ export default function TimeRushMode({
   const busyRef = useRef(false)
   const hintTimerRef = useRef<NodeJS.Timeout | null>(null)
   const boardAreaRef = useRef<HTMLDivElement>(null)
+  // Where the current second started and how much of it a pause already used
+  const tickStartRef = useRef(0)
+  const tickCarryRef = useRef(0)
 
   const updateLive = useCallback((patch: (prev: Live) => Partial<Live>) => {
     liveRef.current = { ...liveRef.current, ...patch(liveRef.current) }
@@ -118,8 +121,20 @@ export default function TimeRushMode({
   // The clock only runs while playing
   useEffect(() => {
     if (phase !== 'playing') return
-    const interval = setInterval(() => setTimeRemaining(prev => Math.max(0, prev - 1)), 1000)
-    return () => clearInterval(interval)
+    let timer: ReturnType<typeof setTimeout>
+    const schedule = (delay: number) => {
+      tickStartRef.current = Date.now()
+      timer = setTimeout(() => {
+        tickCarryRef.current = 0
+        setTimeRemaining(prev => Math.max(0, prev - 1))
+        schedule(1000)
+      }, delay)
+    }
+    schedule(1000 - tickCarryRef.current)
+    return () => {
+      clearTimeout(timer)
+      tickCarryRef.current = Math.min(999, tickCarryRef.current + Date.now() - tickStartRef.current)
+    }
   }, [phase])
 
   // Time is up: lock the engine and settle the round once
