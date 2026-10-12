@@ -59,6 +59,22 @@ export class EnergyManager {
     }
   }
 
+  // Apply regenerated energy and move the timestamp forward by the points gained,
+  // so partial progress toward the next point is kept. A full bar restarts the clock.
+  advance(
+    energy: number,
+    lastUpdate: number,
+    maxEnergy: number = this.config.maxEnergy
+  ): { energy: number; lastUpdate: number } {
+    const { currentEnergy } = this.calculateCurrentEnergy(energy, lastUpdate, maxEnergy)
+    const gained = currentEnergy - energy
+    const regenMs = this.config.regenRateMinutes * 60 * 1000
+    return {
+      energy: currentEnergy,
+      lastUpdate: currentEnergy >= maxEnergy ? Date.now() : lastUpdate + gained * regenMs
+    }
+  }
+
   // Check if player has enough energy for an action
   canPerformAction(currentEnergy: number, actionType: 'game' | 'move' = 'game'): boolean {
     const validEnergy = isNaN(currentEnergy) ? 0 : currentEnergy

@@ -207,7 +207,7 @@ export default function HomePage() {
           const validLastUpdate = isNaN(parsedStats.lastEnergyUpdate) ? Date.now() : parsedStats.lastEnergyUpdate
           
           // Update energy based on time passed
-          const energyStatus = energyManager.getEnergyStatus(
+          const regenerated = energyManager.advance(
             validEnergy,
             validLastUpdate,
             validMaxEnergy
@@ -228,16 +228,15 @@ export default function HomePage() {
           // Update stats with current energy and event
           const updatedStats = {
             ...parsedStats,
-            energy: energyStatus.currentEnergy,
+            energy: regenerated.energy,
             maxEnergy: validMaxEnergy,
-            lastEnergyUpdate: Date.now(),
+            lastEnergyUpdate: regenerated.lastUpdate,
             currentDailyEvent: currentEvent,
             lastDailyEventCheck: Date.now(),
             // Ensure tutorialProgress is properly initialized
             tutorialProgress: parsedStats.tutorialProgress || defaultTutorialProgress
           }
           
-          console.log(`⚡ Energy initialized: ${validEnergy} → ${energyStatus.currentEnergy}/${validMaxEnergy}`)
           setUserStats(updatedStats)
         } else {
           // Initialize with default energy values for new users
@@ -305,24 +304,14 @@ export default function HomePage() {
         const currentEnergy = isNaN(prev.energy) ? maxEnergy : prev.energy // Use max energy as default for NaN, not 0!
         const lastUpdate = isNaN(prev.lastEnergyUpdate) ? Date.now() : prev.lastEnergyUpdate
         
-        // Get current energy status
-        const energyStatus = energyManager.getEnergyStatus(
-          currentEnergy,
-          lastUpdate,
-          maxEnergy
-        )
-        
-        // Only update if energy has actually changed and is valid
-        if (!isNaN(energyStatus.currentEnergy) && energyStatus.currentEnergy !== currentEnergy) {
-          console.log(`⚡ Energy regenerated: ${currentEnergy} → ${energyStatus.currentEnergy}`)
-          return {
-            ...prev,
-            energy: energyStatus.currentEnergy,
-            lastEnergyUpdate: Date.now()
-          }
+        const regenerated = energyManager.advance(currentEnergy, lastUpdate, maxEnergy)
+        if (regenerated.energy === currentEnergy) return prev
+
+        return {
+          ...prev,
+          energy: regenerated.energy,
+          lastEnergyUpdate: regenerated.lastUpdate
         }
-        
-        return prev
       })
     }, 30000) // Check every 30 seconds instead of every minute for more responsive updates
 
@@ -935,19 +924,18 @@ export default function HomePage() {
 
   const handleRefillEnergy = () => {
     const REFILL_COST = 50 // gems
-    
-    if (userStats.gems >= REFILL_COST) {
-      setUserStats(prev => ({
+
+    setUserStats(prev => {
+      const regenerated = energyManager.advance(prev.energy, prev.lastEnergyUpdate, prev.maxEnergy)
+      if (regenerated.energy >= prev.maxEnergy || prev.gems < REFILL_COST) return prev
+
+      return {
         ...prev,
         energy: prev.maxEnergy,
         gems: prev.gems - REFILL_COST,
         lastEnergyUpdate: Date.now()
-      }))
-      console.log('⚡ Energy refilled!')
-    } else {
-      console.warn('💎 Not enough gems to refill energy!')
-      // Could show purchase gems modal here
-    }
+      }
+    })
   }
 
   const handleCompleteTutorialStep = (stepId: string) => {
@@ -1002,33 +990,22 @@ export default function HomePage() {
     const lastUpdate = isNaN(userStats.lastEnergyUpdate) ? Date.now() : userStats.lastEnergyUpdate
     const maxEnergy = isNaN(userStats.maxEnergy) ? 100 : userStats.maxEnergy
 
-    const energyStatus = energyManager.getEnergyStatus(
-      currentEnergy,
-      lastUpdate,
-      maxEnergy
-    )
+    const regenerated = energyManager.advance(currentEnergy, lastUpdate, maxEnergy)
 
-    if (!energyStatus.canPlayGame) {
+    if (!energyManager.canPerformAction(regenerated.energy, 'game')) {
       console.warn('⚡ Not enough energy to play!')
       return false
     }
 
-    // Consume energy and mark session
-    const newEnergy = energyManager.consumeEnergy(energyStatus.currentEnergy, 'game')
-    
-    // Validate the new energy value
-    const validNewEnergy = isNaN(newEnergy) ? 0 : newEnergy
-    
+    // The clock keeps its partial progress; a full bar starts regenerating from now
     setUserStats(prev => ({
       ...prev,
-      energy: validNewEnergy,
-      lastEnergyUpdate: Date.now(),
+      energy: energyManager.consumeEnergy(regenerated.energy, 'game'),
+      lastEnergyUpdate: regenerated.lastUpdate,
       gamesPlayed: prev.gamesPlayed + 1
     }))
 
     setCurrentGameSession(prev => prev ? { ...prev, energyConsumed: true } : null)
-    
-    console.log(`⚡ Energy consumed: ${energyStatus.currentEnergy} → ${validNewEnergy}`)
     return true
   }
 
