@@ -43,7 +43,6 @@ interface GameMode {
   color: string
   title: string
   subtitle: string
-  description: string
   difficulty: 'Easy' | 'Medium' | 'Hard' | 'Expert'
   reward?: number
   locked?: boolean
@@ -55,8 +54,7 @@ const gameModesData: GameMode[] = [
     icon: <Gem className="h-6 w-6" />,
     color: 'var(--gem-water)',
     title: 'Classic',
-    subtitle: 'Timeless match-3 fun',
-    description: 'Match elemental gems and chain combos in endless mode.',
+    subtitle: 'Levels with a move limit',
     difficulty: 'Easy',
   },
   {
@@ -64,8 +62,7 @@ const gameModesData: GameMode[] = [
     icon: <Timer className="h-6 w-6" />,
     color: 'var(--gem-fire)',
     title: 'Time Rush',
-    subtitle: 'Beat the clock',
-    description: 'Race against the timer for the highest score.',
+    subtitle: '60 seconds, highest score',
     difficulty: 'Medium',
   },
   {
@@ -73,8 +70,7 @@ const gameModesData: GameMode[] = [
     icon: <CalendarDays className="h-6 w-6" />,
     color: 'var(--gem-nature)',
     title: 'Daily Quest',
-    subtitle: 'Fresh challenges',
-    description: 'A unique challenge that refreshes every 24 hours.',
+    subtitle: 'One round a day',
     difficulty: 'Hard',
     reward: 100,
   },
@@ -83,8 +79,7 @@ const gameModesData: GameMode[] = [
     icon: <Map className="h-6 w-6" />,
     color: 'var(--gem-earth)',
     title: 'Divine Conquest',
-    subtitle: 'Epic adventure',
-    description: 'A journey through mystical realms.',
+    subtitle: '',
     difficulty: 'Expert',
     locked: true,
   },
@@ -93,8 +88,7 @@ const gameModesData: GameMode[] = [
     icon: <Users className="h-6 w-6" />,
     color: 'var(--gem-lightning)',
     title: 'Multiplayer',
-    subtitle: 'Challenge friends',
-    description: 'Compete with players from around the world.',
+    subtitle: '',
     difficulty: 'Medium',
     locked: true,
   },
@@ -202,7 +196,6 @@ export default function EnhancedMainMenu({
           <Gem className="h-7 w-7 text-ink-on-gold" />
         </span>
         <h1 className="text-5xl font-bold tracking-tight text-fg md:text-6xl">Gems Rush</h1>
-        <p className="mt-3 text-fg-muted">Match elemental gems. Chain combos. Climb the realms.</p>
       </div>
 
       {/* Mode grid */}
@@ -229,7 +222,7 @@ export default function EnhancedMainMenu({
 
             <div>
               <h3 className="text-lg font-semibold text-fg">{mode.title}</h3>
-              <p className="text-sm text-fg-muted">{mode.subtitle}</p>
+              {mode.subtitle && <p className="text-sm text-fg-muted">{mode.subtitle}</p>}
             </div>
 
             <div className="mt-auto flex flex-wrap items-center gap-2">
