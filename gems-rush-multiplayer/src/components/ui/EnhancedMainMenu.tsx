@@ -134,21 +134,21 @@ export default function EnhancedMainMenu({
   return (
     <div className="page-glow relative flex min-h-screen flex-col bg-ink">
       {/* Top bar */}
-      <div className="relative z-10 flex flex-wrap items-center justify-between gap-3 px-4 py-3 md:h-16 md:px-6 md:py-0">
-        <div className="flex flex-wrap items-center gap-2 md:gap-3">
-          <button
-            onClick={onShowDashboard}
-            className="card flex items-center gap-3 px-4 py-2 transition-colors hover:border-line-strong"
-          >
-            <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold">
-              <Crown className="h-5 w-5 text-ink-on-gold" />
-            </span>
-            <span className="text-left">
-              <span className="block whitespace-nowrap text-sm font-semibold text-fg">Level {userLevel}</span>
-              <span className="block text-xs text-fg-dim tabular-nums">{userXP} XP</span>
-            </span>
-          </button>
+      <div className="relative z-10 flex flex-wrap items-center gap-x-3 gap-y-2 px-4 py-3 md:h-16 md:flex-nowrap md:px-6 md:py-0">
+        <button
+          onClick={onShowDashboard}
+          className="card order-1 flex items-center gap-3 px-4 py-2 transition-colors hover:border-line-strong"
+        >
+          <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-gold">
+            <Crown className="h-5 w-5 text-ink-on-gold" />
+          </span>
+          <span className="text-left">
+            <span className="block whitespace-nowrap text-sm font-semibold text-fg">Level {userLevel}</span>
+            <span className="block text-xs text-fg-dim tabular-nums">{userXP} XP</span>
+          </span>
+        </button>
 
+        <div className="order-3 flex w-full flex-wrap items-center gap-2 md:order-2 md:w-auto md:gap-3">
           <div className="chip">
             <Coins className="h-4 w-4 text-gold" />
             <span>{userCoins}</span>
@@ -182,7 +182,7 @@ export default function EnhancedMainMenu({
           )}
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="order-2 ml-auto flex items-center gap-2 md:order-3">
           <button onClick={onShowStats} className="btn btn-icon btn-ghost" aria-label="Stats">
             <BarChart3 className="h-5 w-5" />
           </button>
@@ -196,7 +196,7 @@ export default function EnhancedMainMenu({
       </div>
 
       {/* Hero */}
-      <div className="relative z-10 mt-14 flex flex-col items-center px-6 text-center">
+      <div className="relative z-10 mt-6 flex flex-col items-center px-6 text-center md:mt-14">
         <span className="mb-5 flex h-14 w-14 items-center justify-center rounded-xl bg-gold">
           <Gem className="h-7 w-7 text-ink-on-gold" />
         </span>
@@ -205,7 +205,7 @@ export default function EnhancedMainMenu({
       </div>
 
       {/* Mode grid */}
-      <div className="relative z-10 mx-auto mt-12 grid w-full max-w-5xl grid-cols-1 gap-4 px-6 sm:grid-cols-2 lg:grid-cols-3">
+      <div className="relative z-10 mx-auto mt-8 grid w-full md:mt-12 max-w-5xl grid-cols-1 gap-4 px-6 sm:grid-cols-2 lg:grid-cols-3">
         {gameModesData.map((mode) => (
           <div
             key={mode.id}
@@ -213,7 +213,7 @@ export default function EnhancedMainMenu({
             tabIndex={mode.locked ? undefined : 0}
             onClick={() => handleCardActivate(mode)}
             onKeyDown={(e) => handleCardKeyDown(e, mode)}
-            className={`card flex flex-col gap-4 p-5 transition-all duration-150 ${
+            className={`card flex flex-col gap-3 p-4 transition-all duration-150 sm:gap-4 sm:p-5 ${
               mode.locked
                 ? 'cursor-not-allowed opacity-60'
                 : 'cursor-pointer hover:-translate-y-0.5 hover:border-line-strong focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-violet'
