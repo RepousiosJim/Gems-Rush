@@ -371,10 +371,10 @@ export default function TimeRushMode({ gameEngine, onGameEnd, onPause, onShowMen
         <div className={`card p-3 bg-ink-2 relative ${adrenalineMode ? 'border-bad' : ''}`}>
           <GameBoard
             gameState={gameState}
+            size={520}
             onMove={handleMove}
             disabled={!isActive}
-            onGemClick={handlePowerUpClick}
-            timeRushMode={true}
+            onPowerUpClick={handlePowerUpClick}
           />
 
           {/* Power-up click indicators */}
