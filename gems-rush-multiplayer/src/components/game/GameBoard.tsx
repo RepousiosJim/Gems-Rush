@@ -6,9 +6,9 @@ import { GameState } from '@/types/game'
 import EnhancedGem from '@/components/ui/EnhancedGem'
 
 const GRID = 8
-const GAP = 4
-// Matches the card's p-3
-const PADDING = 12
+const GAP = 3
+// Matches the card's p-2
+const PADDING = 8
 
 interface GameBoardProps {
   gameState: GameState
@@ -64,7 +64,7 @@ export default function GameBoard({
   }, [disabled, gameState.board, selectedGem, onMove, onPowerUpClick])
 
   return (
-    <div className="card bg-ink-2 p-3" style={{ width: size, height: size }}>
+    <div className="card bg-ink-2 p-2" style={{ width: size, height: size }}>
       <div
         className="relative grid"
         style={{

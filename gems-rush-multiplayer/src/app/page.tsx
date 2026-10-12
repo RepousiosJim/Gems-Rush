@@ -11,7 +11,7 @@ import EnhancedMainMenu from '@/components/ui/EnhancedMainMenu'
 import UserOnboarding from '@/components/ui/UserOnboarding'
 import UserDashboard from '@/components/ui/UserDashboard'
 import GameInterface from '@/components/game/GameInterface'
-import TimeRushMode from '@/components/game/TimeRushMode'
+import TimeRushMode, { TimeRushStats } from '@/components/game/TimeRushMode'
 import StageSelectScreen from '@/components/ui/StageSelectScreen'
 import SettingsModal from '@/components/ui/SettingsModal'
 import StatisticsModal from '@/components/ui/StatisticsModal'
@@ -57,15 +57,6 @@ const dateKey = (daysAgo = 0) => {
 
 type AppState = 'menu' | 'game' | 'timeRush' | 'loading' | 'stageSelect'
 type ModalState = 'settings' | 'guide' | 'credits' | 'statistics' | 'dashboard' | null
-
-interface TimeRushStats {
-  finalScore: number
-  totalMatches: number
-  powerUpsActivated: number
-  maxCombo: number
-  rushBonus: number
-  timeUsed: number
-}
 
 interface UserStatsType {
   level: number
@@ -171,7 +162,6 @@ export default function HomePage() {
   const gameEngineRef = useRef<GameEngine | null>(null)
   const gameStateRef = useRef<GameState | null>(null)
   const hintTimeoutRef = useRef<NodeJS.Timeout | null>(null)
-  const timeRushExitRef = useRef<NodeJS.Timeout | null>(null)
   // True from the moment a round starts until its result is recorded, so a round settles exactly once
   const roundOpenRef = useRef(false)
   const userStatsRef = useRef(userStats)
@@ -195,10 +185,6 @@ export default function HomePage() {
 
   // Replace or end the current engine: stops its timers and drops its listeners
   const disposeEngine = () => {
-    if (timeRushExitRef.current) {
-      clearTimeout(timeRushExitRef.current)
-      timeRushExitRef.current = null
-    }
     gameEngineRef.current?.cleanup()
     gameEngineRef.current = null
     setGameEngine(null)
@@ -543,9 +529,13 @@ export default function HomePage() {
         timeRushGamesPlayed: prev.timeRushGamesPlayed + 1
       })
     )
+  }
 
-    // Show results for a moment before returning to menu
-    timeRushExitRef.current = setTimeout(handleShowMenu, 3000)
+  const handleTimeRushPlayAgain = () => {
+    if (!canStartNewGame()) return
+
+    abandonRound()
+    initializeTimeRushMode()
   }
 
   const handleStageSelect = (stageNumber: number) => {
@@ -733,8 +723,10 @@ export default function HomePage() {
           <TimeRushMode
             gameEngine={gameEngine}
             onGameEnd={handleTimeRushEnd}
-            onPause={() => {}}
+            onPlayAgain={handleTimeRushPlayAgain}
             onShowMenu={handleShowMenu}
+            canPlayAgain={canStartNewGame()}
+            hintsEnabled={settings.hints}
           />
         
           {/* Time Rush modals */}
