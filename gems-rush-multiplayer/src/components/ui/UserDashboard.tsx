@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { xpForLevel } from '@/lib/game/leveling'
 import { Modal, ModalTabs } from './Modal'
+import { formatNumber } from '@/lib/utils'
 import {
   Trophy,
   Star,
@@ -184,8 +185,8 @@ export default function UserDashboard({
               </div>
 
               <div className="flex justify-between text-xs text-fg-muted mb-1">
-                <span>{currentLevelXP.toLocaleString()} XP</span>
-                <span>{xpNeeded.toLocaleString()} XP</span>
+                <span>{formatNumber(currentLevelXP)} XP</span>
+                <span>{formatNumber(xpNeeded)} XP</span>
               </div>
               <div className="w-full bg-ink rounded-full h-1.5">
                 <motion.div
@@ -202,12 +203,12 @@ export default function UserDashboard({
         {/* Quick stats */}
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           <div className="card bg-ink-2 p-4">
-            <div className="stat-label mb-1">Coins</div>
-            <div className="stat-value text-gold">{userStats.coins.toLocaleString()}</div>
+            <div className="stat-label mb-1 flex items-center gap-1.5"><Coins className="w-3.5 h-3.5 text-gold" />Coins</div>
+            <div className="stat-value text-gold">{formatNumber(userStats.coins)}</div>
           </div>
           <div className="card bg-ink-2 p-4">
-            <div className="stat-label mb-1">Gems</div>
-            <div className="stat-value text-gold">{userStats.gems}</div>
+            <div className="stat-label mb-1 flex items-center gap-1.5"><Gem className="w-3.5 h-3.5 text-violet" />Gems</div>
+            <div className="stat-value text-violet">{formatNumber(userStats.gems)}</div>
           </div>
           <div className="card bg-ink-2 p-4">
             <div className="stat-label mb-1">Streak</div>
@@ -243,7 +244,7 @@ export default function UserDashboard({
                     </div>
                     <div className="flex-1 min-w-0">
                       <div className="text-fg font-medium text-sm">High score achieved</div>
-                      <div className="text-fg-muted text-xs">Scored {userStats.bestScore.toLocaleString()} points</div>
+                      <div className="text-fg-muted text-xs">Scored {formatNumber(userStats.bestScore)} points</div>
                     </div>
                     <div className="text-fg-dim text-xs shrink-0">Today</div>
                   </div>
@@ -355,15 +356,15 @@ export default function UserDashboard({
                   </div>
                   <div className="flex justify-between items-center py-2.5">
                     <span className="text-fg-muted text-sm">Total Score</span>
-                    <span className="text-fg font-medium tabular-nums">{userStats.totalScore.toLocaleString()}</span>
+                    <span className="text-fg font-medium tabular-nums">{formatNumber(userStats.totalScore)}</span>
                   </div>
                   <div className="flex justify-between items-center py-2.5">
                     <span className="text-fg-muted text-sm">Average Score</span>
-                    <span className="text-fg font-medium tabular-nums">{userStats.averageScore.toLocaleString()}</span>
+                    <span className="text-fg font-medium tabular-nums">{formatNumber(userStats.averageScore)}</span>
                   </div>
                   <div className="flex justify-between items-center py-2.5">
                     <span className="text-fg-muted text-sm">Best Score</span>
-                    <span className="text-gold font-medium tabular-nums">{userStats.bestScore.toLocaleString()}</span>
+                    <span className="text-gold font-medium tabular-nums">{formatNumber(userStats.bestScore)}</span>
                   </div>
                   <div className="flex justify-between items-center py-2.5">
                     <span className="text-fg-muted text-sm">Favorite Mode</span>

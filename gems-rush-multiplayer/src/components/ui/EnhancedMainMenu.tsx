@@ -16,6 +16,7 @@ import {
   Users,
   Lock,
 } from 'lucide-react'
+import { formatNumber } from '@/lib/utils'
 
 interface EnhancedMainMenuProps {
   onModeSelect: (mode: string) => void
@@ -144,18 +145,18 @@ export default function EnhancedMainMenu({
           </span>
           <span className="text-left">
             <span className="block whitespace-nowrap text-sm font-semibold text-fg">Level {userLevel}</span>
-            <span className="block text-xs text-fg-dim tabular-nums">{userXP} XP</span>
+            <span className="block text-xs text-fg-dim tabular-nums">{formatNumber(userXP)} XP</span>
           </span>
         </button>
 
         <div className="order-3 flex w-full flex-wrap items-center gap-2 md:order-2 md:w-auto md:gap-3">
           <div className="chip">
             <Coins className="h-4 w-4 text-gold" />
-            <span>{userCoins}</span>
+            <span>{formatNumber(userCoins)}</span>
           </div>
           <div className="chip">
             <Gem className="h-4 w-4 text-violet" />
-            <span>{userGems}</span>
+            <span>{formatNumber(userGems)}</span>
           </div>
 
           <button

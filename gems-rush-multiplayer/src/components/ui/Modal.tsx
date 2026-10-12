@@ -125,7 +125,7 @@ export function ModalTabs<T extends string>({
         <button
           key={tab.id}
           onClick={() => onChange(tab.id)}
-          className={`flex shrink-0 items-center gap-2 border-b-2 px-4 py-3 text-sm font-medium transition-colors ${
+          className={`flex shrink-0 items-center gap-2 border-b-2 px-3 py-3 text-sm sm:px-4 font-medium transition-colors ${
             active === tab.id
               ? 'border-violet bg-surface-2 text-fg'
               : 'border-transparent text-fg-muted hover:bg-surface-2/60 hover:text-fg'
