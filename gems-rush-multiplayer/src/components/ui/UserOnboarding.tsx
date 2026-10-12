@@ -43,7 +43,7 @@ const onboardingSteps: OnboardingStep[] = [
   {
     id: 'modes',
     title: 'Game Modes',
-    description: 'Choose from multiple game modes: Classic for endless play, Time Rush for fast-paced action, and Daily Quest for special rewards.',
+    description: 'Classic levels have a move limit. Time Rush scores for 60 seconds. Daily Quest is one round a day.',
     icon: Target,
   },
   {
@@ -161,7 +161,7 @@ export default function UserOnboarding({ isVisible, onComplete, onSkip }: UserOn
                     </div>
                     <div className="card bg-ink-2 p-3">
                       <Medal className="h-6 w-6 text-gold mx-auto mb-1" />
-                      <div className="text-fg text-xs font-medium">Campaign</div>
+                      <div className="text-fg text-xs font-medium">Divine Conquest</div>
                     </div>
                   </div>
                 )}
