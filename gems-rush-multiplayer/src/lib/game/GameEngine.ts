@@ -60,6 +60,8 @@ export interface GameEngineOptions {
   autoComplete?: boolean
 }
 
+const HINT_DELAY_MS = 30000
+
 export class GameEngine extends EventEmitter {
   private gameState: GameState
   private animationQueue: Array<() => Promise<void>> = []
@@ -68,7 +70,6 @@ export class GameEngine extends EventEmitter {
   private initialized: boolean = false
   private moveInProgress: boolean = false
   private hintTimeout?: NodeJS.Timeout
-  private lastHintTime: number = 0
   private autoComplete: boolean
 
   constructor(initialState?: Partial<GameState>, options: GameEngineOptions = {}) {
@@ -125,7 +126,6 @@ export class GameEngine extends EventEmitter {
       this.initialized = true
       this.emit('game:initialized', this.gameState)
       
-      // Start hint timer (show hint after 30 seconds of inactivity)
       this.startHintTimer()
       
       console.log('✅ Game Engine initialized successfully')
@@ -832,31 +832,30 @@ export class GameEngine extends EventEmitter {
     return bonus
   }
 
-  // Smart hint system with timer
+  // Hint after a stretch of inactivity; re-arms only while the game is playing
   private startHintTimer(): void {
-    this.lastHintTime = Date.now()
-    this.scheduleNextHint()
+    this.stopHintTimer()
+    this.hintTimeout = setTimeout(() => {
+      this.hintTimeout = undefined
+      if (this.gameState.gameStatus !== 'playing') return
+
+      if (!this.isAnimating) {
+        this.showHint()
+      }
+      this.startHintTimer()
+    }, HINT_DELAY_MS)
   }
 
-  private scheduleNextHint(): void {
-    this.hintTimeout = setTimeout(() => {
-      if (this.gameState.gameStatus === 'playing' && !this.isAnimating) {
-        this.autoShowHint()
-      }
-      this.scheduleNextHint()
-    }, 30000) // Show hint after 30 seconds of inactivity
+  private stopHintTimer(): void {
+    if (this.hintTimeout) {
+      clearTimeout(this.hintTimeout)
+      this.hintTimeout = undefined
+    }
   }
 
   private resetHintTimer(): void {
-    this.lastHintTime = Date.now()
     this.emit('hint:hide')
-  }
-
-  private autoShowHint(): void {
-    const timeSinceLastMove = Date.now() - this.lastHintTime
-    if (timeSinceLastMove >= 30000) { // 30 seconds
-      this.showHint()
-    }
+    this.startHintTimer()
   }
 
   // Enhanced hint system
@@ -950,6 +949,7 @@ export class GameEngine extends EventEmitter {
     if (!this.autoComplete || this.gameState.score < this.gameState.targetScore) return
 
     this.gameState.gameStatus = 'completed'
+    this.stopHintTimer()
     this.emit('game:level-completed', this.gameState.level)
   }
 
@@ -1031,6 +1031,7 @@ export class GameEngine extends EventEmitter {
   pause(): void {
     if (this.gameState.gameStatus === 'playing') {
       this.gameState.gameStatus = 'paused'
+      this.stopHintTimer()
       this.emit('paused')
     }
   }
@@ -1038,14 +1039,13 @@ export class GameEngine extends EventEmitter {
   resume(): void {
     if (this.gameState.gameStatus === 'paused') {
       this.gameState.gameStatus = 'playing'
+      this.startHintTimer()
       this.emit('resumed')
     }
   }
 
   cleanup(): void {
-    if (this.hintTimeout) {
-      clearTimeout(this.hintTimeout)
-    }
+    this.stopHintTimer()
     this.removeAllListeners()
     this.initialized = false
     this.isAnimating = false

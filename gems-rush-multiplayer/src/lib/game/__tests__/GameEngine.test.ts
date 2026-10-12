@@ -326,6 +326,67 @@ describe('GameEngine', () => {
     })
   })
 
+  describe('timers', () => {
+    beforeEach(() => {
+      jest.useFakeTimers()
+    })
+
+    afterEach(() => {
+      jest.useRealTimers()
+    })
+
+    it('shows a hint after inactivity and keeps hinting while playing', async () => {
+      const hints = jest.fn()
+      gameEngine.on('hint:show', hints)
+      await gameEngine.initialize()
+
+      jest.advanceTimersByTime(30000)
+      expect(hints).toHaveBeenCalledTimes(1)
+      jest.advanceTimersByTime(30000)
+      expect(hints).toHaveBeenCalledTimes(2)
+    })
+
+    it('stops the hint loop when the game completes', async () => {
+      gameEngine = new GameEngine({ targetScore: 50 })
+      await gameEngine.initialize()
+      setBoard(gameEngine, createBoardWithMove())
+      await gameEngine.makeMove(0, 2, 0, 3)
+      expect(gameEngine.getGameState().gameStatus).toBe('completed')
+
+      expect(jest.getTimerCount()).toBe(0)
+    })
+
+    it('stops hinting while paused and resumes after', async () => {
+      const hints = jest.fn()
+      gameEngine.on('hint:show', hints)
+      await gameEngine.initialize()
+
+      gameEngine.pause()
+      expect(jest.getTimerCount()).toBe(0)
+      jest.advanceTimersByTime(120000)
+      expect(hints).not.toHaveBeenCalled()
+
+      gameEngine.resume()
+      jest.advanceTimersByTime(30000)
+      expect(hints).toHaveBeenCalledTimes(1)
+    })
+
+    it('does not stack timers when the game is re-initialized', async () => {
+      await gameEngine.initialize()
+      await gameEngine.initialize()
+      gameEngine.reset()
+
+      expect(jest.getTimerCount()).toBe(1)
+    })
+
+    it('cleanup clears every timer', async () => {
+      await gameEngine.initialize()
+      gameEngine.cleanup()
+
+      expect(jest.getTimerCount()).toBe(0)
+    })
+  })
+
   describe('move validation', () => {
     beforeEach(async () => {
       await gameEngine.initialize()
