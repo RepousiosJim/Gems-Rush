@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events'
 import { Gem, GemType, GameState, GameMove, GameMoveResult } from '@/types/game'
-import { GAME_CONFIG, GEM_TYPES, ERROR_MESSAGES, SUCCESS_MESSAGES } from './constants'
+import { GAME_CONFIG, GEM_TYPES } from './constants'
 
 // Enhanced power-up types
 export type PowerUpType = 'lightning' | 'bomb' | 'rainbow' | 'hammer' | 'shuffle'
