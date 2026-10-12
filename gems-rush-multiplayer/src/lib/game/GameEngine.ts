@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events'
 import { Gem, GemType, GameState, GameMove, GameMoveResult } from '@/types/game'
-import { GAME_CONFIG, GEM_TYPES, ERROR_MESSAGES, SUCCESS_MESSAGES } from './constants'
+import { GAME_CONFIG, GEM_TYPES } from './constants'
 
 // Enhanced power-up types
 export type PowerUpType = 'lightning' | 'bomb' | 'rainbow' | 'hammer' | 'shuffle'
@@ -39,12 +39,14 @@ export interface GameEngineEvents {
   'game:score-updated': (newScore: number, scoreChange?: number) => void
   'game:level-completed': (level: number) => void
   'game:game-over': (gameState: GameState) => void
-  'game:board-changed': (board: (Gem | null)[][]) => void
+  'game:board-changed': (gameState: GameState) => void
   'game:move-made': (move: GameMove, result: GameMoveResult) => void
   'game:level-up': (newLevel: number) => void
   'game:powerup-created': (powerUp: PowerUpGem) => void
   'game:powerup-activated': (powerUp: PowerUpGem, effects: { affectedGems: Gem[], scoreEarned: number }) => void
   'game:match-found': (matches: MatchGroup[]) => void
+  // Every gem removed from the board: matches, cascades and power-up blasts, each gem once per removal
+  'game:gems-cleared': (gems: Gem[]) => void
   'game:cascade': (cascadeLevel: number, matches: MatchGroup[]) => void
   'game:no-moves': () => void
   'game:reshuffle': () => void
@@ -55,6 +57,13 @@ export interface GameEngineEvents {
   'board:reshuffled': () => void
 }
 
+export interface GameEngineOptions {
+  // Complete the game when the score reaches targetScore. Turn off when the caller owns win/lose (e.g. timed mode).
+  autoComplete?: boolean
+}
+
+const HINT_DELAY_MS = 30000
+
 export class GameEngine extends EventEmitter {
   private gameState: GameState
   private animationQueue: Array<() => Promise<void>> = []
@@ -63,10 +72,11 @@ export class GameEngine extends EventEmitter {
   private initialized: boolean = false
   private moveInProgress: boolean = false
   private hintTimeout?: NodeJS.Timeout
-  private lastHintTime: number = 0
+  private autoComplete: boolean
 
-  constructor(initialState?: Partial<GameState>) {
+  constructor(initialState?: Partial<GameState>, options: GameEngineOptions = {}) {
     super()
+    this.autoComplete = options.autoComplete ?? true
     this.gameState = this.createInitialState(initialState)
   }
 
@@ -105,13 +115,8 @@ export class GameEngine extends EventEmitter {
   // Initialize the game
   async initialize(boardSize: number = GAME_CONFIG.BOARD_SIZE): Promise<boolean> {
     try {
-      console.log('🎮 Initializing Game Engine...')
-      
       // Create initial board with no matches but guaranteed moves
       const board = this.createValidBoard(boardSize)
-      if (!board) {
-        throw new Error('Failed to create initial board')
-      }
 
       // Set up game state
       this.gameState.board = board
@@ -120,12 +125,7 @@ export class GameEngine extends EventEmitter {
       
       this.initialized = true
       this.emit('game:initialized', this.gameState)
-      
-      // Start hint timer (show hint after 30 seconds of inactivity)
       this.startHintTimer()
-      
-      console.log('✅ Game Engine initialized successfully')
-      console.log(`Target score for level ${this.gameState.level}: ${this.gameState.targetScore}`)
       return true
     } catch (error) {
       console.error('❌ Game Engine initialization failed:', error)
@@ -134,82 +134,36 @@ export class GameEngine extends EventEmitter {
     }
   }
 
-  // Create a valid board with no initial matches but guaranteed moves
+  // Create a board with no matches and at least one possible move
   createValidBoard(size: number, maxAttempts: number = 100): (Gem | null)[][] {
     for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const board = this.generateRandomBoard(size)
-      if (!this.hasInitialMatches(board) && this.hasPossibleMoves(board)) {
-        console.log(`✅ Valid board created in ${attempt + 1} attempts`)
+      const board = this.generateMatchFreeBoard(size)
+      if (this.hasPossibleMoves(board)) {
         return board
       }
     }
-    
-    // If we can't generate a valid board, create one with forced placement
-    console.log('⚠️ Using forced board generation')
-    return this.createForcedValidBoard(size)
+
+    throw new Error('Failed to create a playable board')
   }
 
-  // Generate a random board
-  private generateRandomBoard(size: number): (Gem | null)[][] {
+  // Fill a board gem by gem, never completing a match
+  private generateMatchFreeBoard(size: number): (Gem | null)[][] {
     const board: (Gem | null)[][] = []
     const gemTypes = Object.keys(GEM_TYPES) as GemType[]
 
-    for (let row = 0; row < size; row++) {
-      board[row] = []
-      for (let col = 0; col < size; col++) {
-        const gemType = gemTypes[Math.floor(Math.random() * gemTypes.length)]
-        board[row][col] = this.createGem(gemType, row, col)
-      }
-    }
-
-    return board
-  }
-
-  // Create board with careful placement to avoid matches but ensure moves
-  private createForcedValidBoard(size: number): (Gem | null)[][] {
-    const board: (Gem | null)[][] = []
-    const gemTypes = Object.keys(GEM_TYPES) as GemType[]
-
-    // Fill board ensuring no immediate matches
     for (let row = 0; row < size; row++) {
       board[row] = []
       for (let col = 0; col < size; col++) {
         let gemType: GemType
-        let attempts = 0
-        
         do {
           gemType = gemTypes[Math.floor(Math.random() * gemTypes.length)]
-          attempts++
-        } while (
-          attempts < 50 && 
-          this.wouldCreateMatch(board, row, col, gemType)
-        )
+        } while (this.wouldCreateMatch(board, row, col, gemType))
 
         board[row][col] = this.createGem(gemType, row, col)
       }
     }
 
-    // Ensure at least one possible move exists
-    if (!this.hasPossibleMoves(board)) {
-      this.forcePossibleMove(board)
-    }
-
     return board
-  }
-
-  // Force at least one possible move on the board
-  private forcePossibleMove(board: (Gem | null)[][]): void {
-    const size = board.length
-    const gemTypes = Object.keys(GEM_TYPES) as GemType[]
-    
-    // Create a simple 3-in-a-row opportunity
-    if (size >= 3) {
-      const targetType = gemTypes[0]
-      // Place pattern that will match when swapped
-      board[0][0] = this.createGem(targetType, 0, 0)
-      board[0][2] = this.createGem(targetType, 0, 2)
-      board[0][1] = this.createGem(gemTypes[1], 0, 1) // Different type in middle
-    }
   }
 
   // Check if board has any initial matches
@@ -260,35 +214,28 @@ export class GameEngine extends EventEmitter {
     return hasMatch
   }
 
+  // Find the match group through a position in one direction
+  private groupAt(board: (Gem | null)[][], row: number, col: number, direction: 'horizontal' | 'vertical'): MatchGroup | null {
+    const gem = board[row]?.[col]
+    if (!gem) return null
+
+    const gems = this.getMatchingGemsInDirection(board, row, col, gem.type, direction)
+    if (gems.length < GAME_CONFIG.MIN_MATCH_SIZE) return null
+
+    return {
+      gems,
+      type: gem.type,
+      matchType: direction,
+      powerUpCreated: this.determinePowerUpType(gems.length)
+    }
+  }
+
   // Find matches starting from a specific position
   private findMatchesAt(board: (Gem | null)[][], row: number, col: number): MatchGroup[] {
-    const matches: MatchGroup[] = []
-    const gem = board[row]?.[col]
-    if (!gem) return matches
-
-    // Check horizontal match
-    const horizontalGems = this.getMatchingGemsInDirection(board, row, col, gem.type, 'horizontal')
-    if (horizontalGems.length >= GAME_CONFIG.MIN_MATCH_SIZE) {
-      matches.push({
-        gems: horizontalGems,
-        type: gem.type,
-        matchType: 'horizontal',
-        powerUpCreated: this.determinePowerUpType(horizontalGems.length)
-      })
-    }
-
-    // Check vertical match
-    const verticalGems = this.getMatchingGemsInDirection(board, row, col, gem.type, 'vertical')
-    if (verticalGems.length >= GAME_CONFIG.MIN_MATCH_SIZE) {
-      matches.push({
-        gems: verticalGems,
-        type: gem.type,
-        matchType: 'vertical',
-        powerUpCreated: this.determinePowerUpType(verticalGems.length)
-      })
-    }
-
-    return matches
+    return [
+      this.groupAt(board, row, col, 'horizontal'),
+      this.groupAt(board, row, col, 'vertical')
+    ].filter((group): group is MatchGroup => group !== null)
   }
 
   // Get matching gems in a specific direction
@@ -310,7 +257,7 @@ export class GameEngine extends EventEmitter {
       }
       
       // Collect all matching gems
-      for (let col = colStart; col < size && board[startRow][col]?.type === gemType; col++) {
+      for (let col = colStart; col < board[startRow].length && board[startRow][col]?.type === gemType; col++) {
         gems.push(board[startRow][col]!)
       }
     } else {
@@ -376,61 +323,24 @@ export class GameEngine extends EventEmitter {
       this.isAnimating = true
       this.emit('moveStarted', { fromRow, fromCol, toRow, toCol })
 
-      // Check if activating a power-up
-      const fromGem = this.gameState.board[fromRow][fromCol]
-      const toGem = this.gameState.board[toRow][toCol]
-      
-      if (this.isPowerUpGem(fromGem) || this.isPowerUpGem(toGem)) {
-        return await this.activatePowerUp(fromGem as PowerUpGem, toGem)
+      const { board } = this.gameState
+      let result: GameMoveResult
+      if (this.isPowerUpGem(board[fromRow][fromCol]) || this.isPowerUpGem(board[toRow][toCol])) {
+        result = await this.activatePowerUp(fromRow, fromCol, toRow, toCol)
+      } else {
+        const swapped = this.swapGems(board, fromRow, fromCol, toRow, toCol)
+        const matches = this.findAllMatches(swapped)
+        result = matches.length === 0
+          ? { valid: false, scoreChange: 0, matchesFound: [], newBoard: board, comboCount: 0 }
+          : await this.processMatchesAndCascades(swapped, matches, 0)
       }
 
-      // Regular swap
-      const newBoard = this.swapGems(this.gameState.board, fromRow, fromCol, toRow, toCol)
-      
-      // Check for matches
-      const matches = this.findAllMatches(newBoard)
-      
-      if (matches.length === 0) {
-        // No matches, swap back
-        this.swapGems(newBoard, fromRow, fromCol, toRow, toCol)
-        this.isAnimating = false
-        return {
-          valid: false,
-          scoreChange: 0,
-          matchesFound: [],
-          newBoard: this.gameState.board,
-          comboCount: 0
-        }
+      if (result.valid) {
+        this.commitMove(result, { fromRow, fromCol, toRow, toCol })
       }
-
-      // Process matches and cascades
-      const result = await this.processMatchesAndCascades(newBoard, matches, 0)
-      
-      // Update game state
-      this.gameState.board = result.newBoard
-      this.gameState.score += result.scoreChange
-      this.gameState.moves++
-      this.gameState.lastMoveScore = result.scoreChange
-      this.gameState.comboMultiplier = Math.max(1, result.comboCount)
-
-      this.isAnimating = false
-      
-      // Check for level completion
-      this.checkLevelCompletion()
-      
-      // Check if no moves available after this move
-      if (!this.hasPossibleMoves(result.newBoard)) {
-        console.log('🔄 No moves available - reshuffling board...')
-        this.reshuffleBoard()
-      }
-      
-      this.emit('game:move-made', { id: Date.now().toString(), playerId: 'local', fromRow, fromCol, toRow, toCol, timestamp: Date.now(), type: 'swap' }, result)
-      this.emit('game:board-changed', this.gameState.board)
-      this.emit('game:score-updated', this.gameState.score, result.scoreChange)
 
       return result
     } catch (error) {
-      this.isAnimating = false
       console.error('Error making move:', error)
       return {
         valid: false,
@@ -441,7 +351,28 @@ export class GameEngine extends EventEmitter {
       }
     } finally {
       this.moveInProgress = false
+      this.isAnimating = false
     }
+  }
+
+  // Write a resolved move into engine state and announce it
+  private commitMove(result: GameMoveResult, move: { fromRow: number; fromCol: number; toRow: number; toCol: number }): void {
+    this.gameState.board = result.newBoard
+    this.gameState.score += result.scoreChange
+    this.gameState.moves++
+    this.gameState.lastMoveScore = result.scoreChange
+    this.gameState.comboMultiplier = Math.max(1, result.comboCount)
+    this.isAnimating = false
+
+    this.checkLevelCompletion()
+
+    if (this.gameState.gameStatus === 'playing' && !this.hasPossibleMoves(result.newBoard)) {
+      this.reshuffleBoard()
+    }
+
+    this.emit('game:move-made', { id: Date.now().toString(), playerId: 'local', ...move, timestamp: Date.now(), type: 'swap' }, result)
+    this.emit('game:board-changed', this.getGameState())
+    this.emit('game:score-updated', this.gameState.score, result.scoreChange)
   }
 
   // Check if gem is a power-up
@@ -449,47 +380,55 @@ export class GameEngine extends EventEmitter {
     return gem !== null && 'isPowerUp' in gem && gem.isPowerUp === true
   }
 
-  // Activate power-up effects
-  private async activatePowerUp(powerUpGem: PowerUpGem, targetGem: Gem | null): Promise<GameMoveResult> {
-    console.log(`⚡ Activating ${powerUpGem.powerUpType} power-up`)
-    
+  // Activate power-up effects; either swapped gem may be the power-up (the first one wins)
+  private async activatePowerUp(fromRow: number, fromCol: number, toRow: number, toCol: number): Promise<GameMoveResult> {
+    const fromGem = this.gameState.board[fromRow][fromCol]
+    const toGem = this.gameState.board[toRow][toCol]
+    const fromIsPowerUp = this.isPowerUpGem(fromGem)
+    const powerUpGem = (fromIsPowerUp ? fromGem : toGem) as PowerUpGem
+    const [row, col] = fromIsPowerUp ? [fromRow, fromCol] : [toRow, toCol]
+    const targetGem = fromIsPowerUp ? toGem : fromGem
+
+    const newBoard = this.gameState.board.map(line => [...line])
     let affectedGems: Gem[] = []
-    const newBoard = this.gameState.board.map(row => [...row])
 
     switch (powerUpGem.powerUpType) {
       case 'lightning':
-        // Clear entire row and column
-        affectedGems = this.getLightningEffectGems(newBoard, powerUpGem.row, powerUpGem.col)
+        affectedGems = this.getLightningEffectGems(newBoard, row, col)
         break
-      
       case 'bomb':
-        // Clear 3x3 area
-        affectedGems = this.getBombEffectGems(newBoard, powerUpGem.row, powerUpGem.col)
+        affectedGems = this.getBombEffectGems(newBoard, row, col)
         break
-      
       case 'rainbow':
-        // Clear all gems of target type
         if (targetGem) {
           affectedGems = this.getRainbowEffectGems(newBoard, targetGem.type)
         }
         break
     }
 
-    // Remove affected gems
+    // The power-up is always consumed
+    if (!affectedGems.includes(powerUpGem)) {
+      affectedGems.push(powerUpGem)
+    }
+
     let totalScore = 0
     for (const gem of affectedGems) {
       newBoard[gem.row][gem.col] = null
       totalScore += 100 // Base score per gem removed by power-up
     }
+    this.emit('game:gems-cleared', affectedGems)
 
-    // Apply gravity and fill
-    const processedBoard = this.fillEmptySpaces(this.applyGravity(newBoard))
-    
-    // Check for new matches after power-up
+    let processedBoard = this.fillEmptySpaces(this.applyGravity(newBoard))
+    const matchesFound: Gem[][] = []
+    let comboCount = 1
+
     const newMatches = this.findAllMatches(processedBoard)
     if (newMatches.length > 0) {
       const cascadeResult = await this.processMatchesAndCascades(processedBoard, newMatches, 1)
       totalScore += cascadeResult.scoreChange
+      matchesFound.push(...cascadeResult.matchesFound)
+      processedBoard = cascadeResult.newBoard
+      comboCount = cascadeResult.comboCount
     }
 
     this.emit('game:powerup-activated', powerUpGem, { affectedGems, scoreEarned: totalScore })
@@ -497,9 +436,9 @@ export class GameEngine extends EventEmitter {
     return {
       valid: true,
       scoreChange: totalScore,
-      matchesFound: newMatches.map(group => group.gems),
+      matchesFound,
       newBoard: processedBoard,
-      comboCount: 1
+      comboCount
     }
   }
 
@@ -550,32 +489,27 @@ export class GameEngine extends EventEmitter {
     return gems
   }
 
-  // Find all matches on the board with enhanced algorithm
+  // Find all matches on the board
   findAllMatches(board: (Gem | null)[][]): MatchGroup[] {
     const matches: MatchGroup[] = []
-    const processedPositions = new Set<string>()
-
-    console.log('🔍 Starting enhanced match detection...')
+    const seen = { horizontal: new Set<string>(), vertical: new Set<string>() }
 
     for (let row = 0; row < board.length; row++) {
       for (let col = 0; col < board[row].length; col++) {
-        const gem = board[row][col]
-        if (!gem || processedPositions.has(`${row},${col}`)) continue
+        for (const direction of ['horizontal', 'vertical'] as const) {
+          if (seen[direction].has(`${row},${col}`)) continue
 
-        // Find matches starting from this position
-        const gemMatches = this.findMatchesAt(board, row, col)
-        
-        for (const match of gemMatches) {
-          // Mark all gems in this match as processed
+          const match = this.groupAt(board, row, col, direction)
+          if (!match) continue
+
           for (const matchGem of match.gems) {
-            processedPositions.add(`${matchGem.row},${matchGem.col}`)
+            seen[direction].add(`${matchGem.row},${matchGem.col}`)
           }
           matches.push(match)
         }
       }
     }
 
-    console.log(`✅ Enhanced match detection complete: found ${matches.length} match groups`)
     return matches
   }
 
@@ -592,8 +526,11 @@ export class GameEngine extends EventEmitter {
     let currentBoard = [...board.map(row => [...row])]
     const powerUpsCreated: PowerUpGem[] = []
 
-    console.log(`🔍 Processing ${initialMatches.length} match groups at combo level ${comboLevel}`)
-    
+    this.emit('game:match-found', initialMatches)
+    // A gem in both a row and a column group is removed once
+    const cleared = new Map(initialMatches.flatMap(group => group.gems).map(gem => [`${gem.row},${gem.col}`, gem]))
+    this.emit('game:gems-cleared', [...cleared.values()])
+
     // Process each match group
     for (const matchGroup of initialMatches) {
       const matchScore = this.calculateMatchScore(matchGroup.gems, comboLevel)
@@ -618,7 +555,6 @@ export class GameEngine extends EventEmitter {
       // Remove matched gems
       for (const gem of matchGroup.gems) {
         if (currentBoard[gem.row][gem.col]) {
-          console.log(`🗑️ Removing gem at (${gem.row},${gem.col}): ${gem.type}`)
           currentBoard[gem.row][gem.col] = null
         }
       }
@@ -629,8 +565,6 @@ export class GameEngine extends EventEmitter {
       currentBoard[powerUp.row][powerUp.col] = powerUp
     }
 
-    console.log(`💰 Total score for this cascade: ${totalScore}`)
-
     // Apply gravity and fill
     currentBoard = this.applyGravity(currentBoard)
     currentBoard = this.fillEmptySpaces(currentBoard)
@@ -639,13 +573,10 @@ export class GameEngine extends EventEmitter {
     const newMatches = this.findAllMatches(currentBoard)
     
     if (newMatches.length > 0) {
-      console.log(`🔄 Found ${newMatches.length} new matches after cascade - continuing...`)
       const cascadeResult = await this.processMatchesAndCascades(currentBoard, newMatches, comboLevel + 1)
       totalScore += cascadeResult.scoreChange
       allMatches.push(...cascadeResult.matchesFound)
       currentBoard = cascadeResult.newBoard
-    } else {
-      console.log('✅ No more matches found - cascade complete')
     }
 
     return {
@@ -688,9 +619,7 @@ export class GameEngine extends EventEmitter {
     // Rush bonus for cascades
     const rushBonus = comboLevel * baseScore
     const finalScore = baseScore + rushBonus
-    
-    console.log(`Match of ${match.length} gems, combo level ${comboLevel}: ${baseScore} + ${rushBonus} = ${finalScore}`)
-    
+
     return finalScore
   }
 
@@ -721,23 +650,14 @@ export class GameEngine extends EventEmitter {
     return (rowDiff === 1 && colDiff === 0) || (rowDiff === 0 && colDiff === 1)
   }
 
-  // Swap two gems on the board
+  // Swap two gems on a copy of the board; gems are cloned so the original board's gems keep their coordinates
   private swapGems(board: (Gem | null)[][], row1: number, col1: number, row2: number, col2: number): (Gem | null)[][] {
     const newBoard = board.map(row => [...row])
-    
-    const temp = newBoard[row1][col1]
-    newBoard[row1][col1] = newBoard[row2][col2]
-    newBoard[row2][col2] = temp
+    const first = board[row1][col1]
+    const second = board[row2][col2]
 
-    // Update gem positions
-    if (newBoard[row1][col1]) {
-      newBoard[row1][col1]!.row = row1
-      newBoard[row1][col1]!.col = col1
-    }
-    if (newBoard[row2][col2]) {
-      newBoard[row2][col2]!.row = row2
-      newBoard[row2][col2]!.col = col2
-    }
+    newBoard[row1][col1] = second && { ...second, row: row1, col: col1 }
+    newBoard[row2][col2] = first && { ...first, row: row2, col: col2 }
 
     return newBoard
   }
@@ -749,10 +669,11 @@ export class GameEngine extends EventEmitter {
 
     for (let col = 0; col < boardSize; col++) {
       // Get all non-null gems in column from bottom to top
-      const gems = []
+      const gems: Gem[] = []
       for (let row = boardSize - 1; row >= 0; row--) {
-        if (newBoard[row][col]) {
-          gems.push(newBoard[row][col])
+        const gem = newBoard[row][col]
+        if (gem) {
+          gems.push(gem)
           newBoard[row][col] = null
         }
       }
@@ -760,10 +681,8 @@ export class GameEngine extends EventEmitter {
       // Place gems at bottom
       for (let i = 0; i < gems.length; i++) {
         const newRow = boardSize - 1 - i
-        newBoard[newRow][col] = gems[i]
-        if (newBoard[newRow][col]) {
-          newBoard[newRow][col]!.row = newRow
-        }
+        const gem = gems[i]
+        newBoard[newRow][col] = gem.row === newRow ? gem : { ...gem, row: newRow }
       }
     }
 
@@ -903,31 +822,30 @@ export class GameEngine extends EventEmitter {
     return bonus
   }
 
-  // Smart hint system with timer
+  // Hint after a stretch of inactivity; re-arms only while the game is playing
   private startHintTimer(): void {
-    this.lastHintTime = Date.now()
-    this.scheduleNextHint()
+    this.stopHintTimer()
+    this.hintTimeout = setTimeout(() => {
+      this.hintTimeout = undefined
+      if (this.gameState.gameStatus !== 'playing') return
+
+      if (!this.isAnimating) {
+        this.showHint()
+      }
+      this.startHintTimer()
+    }, HINT_DELAY_MS)
   }
 
-  private scheduleNextHint(): void {
-    this.hintTimeout = setTimeout(() => {
-      if (this.gameState.gameStatus === 'playing' && !this.isAnimating) {
-        this.autoShowHint()
-      }
-      this.scheduleNextHint()
-    }, 30000) // Show hint after 30 seconds of inactivity
+  private stopHintTimer(): void {
+    if (this.hintTimeout) {
+      clearTimeout(this.hintTimeout)
+      this.hintTimeout = undefined
+    }
   }
 
   private resetHintTimer(): void {
-    this.lastHintTime = Date.now()
     this.emit('hint:hide')
-  }
-
-  private autoShowHint(): void {
-    const timeSinceLastMove = Date.now() - this.lastHintTime
-    if (timeSinceLastMove >= 30000) { // 30 seconds
-      this.showHint()
-    }
+    this.startHintTimer()
   }
 
   // Enhanced hint system
@@ -972,63 +890,67 @@ export class GameEngine extends EventEmitter {
     }
   }
 
-  // Reshuffle board when no moves available
-  private reshuffleBoard(): void {
-    console.log('🔄 Reshuffling board...')
-    
-    // Collect all gems (excluding power-ups for now)
-    const gems: Gem[] = []
-    for (let row = 0; row < this.gameState.boardSize; row++) {
-      for (let col = 0; col < this.gameState.boardSize; col++) {
-        const gem = this.gameState.board[row][col]
-        if (gem && !this.isPowerUpGem(gem)) {
-          gems.push(gem)
-        }
+  // Reshuffle board when no moves available; power-ups stay where they are
+  private reshuffleBoard(maxAttempts: number = 50): void {
+    const { boardSize, board: current } = this.gameState
+    const movable: Gem[] = []
+    for (let row = 0; row < boardSize; row++) {
+      for (let col = 0; col < boardSize; col++) {
+        const gem = current[row][col]
+        if (gem && !this.isPowerUpGem(gem)) movable.push(gem)
       }
     }
 
-    // Shuffle gems
-    for (let i = gems.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1))
-      ;[gems[i], gems[j]] = [gems[j], gems[i]]
-    }
+    let board: (Gem | null)[][] | null = null
+    for (let attempt = 0; attempt < maxAttempts && !board; attempt++) {
+      const pool = [...movable]
+      for (let i = pool.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1))
+        ;[pool[i], pool[j]] = [pool[j], pool[i]]
+      }
 
-    // Place shuffled gems back
-    let gemIndex = 0
-    for (let row = 0; row < this.gameState.boardSize; row++) {
-      for (let col = 0; col < this.gameState.boardSize; col++) {
-        if (!this.isPowerUpGem(this.gameState.board[row][col])) {
-          if (gemIndex < gems.length) {
-            const gem = gems[gemIndex]
-            gem.row = row
-            gem.col = col
-            this.gameState.board[row][col] = gem
-            gemIndex++
+      // Place gems one by one, skipping any that would complete a match
+      const candidate: (Gem | null)[][] = current.map(line => line.map(gem => (this.isPowerUpGem(gem) ? gem : null)))
+      let complete = true
+      for (let row = 0; row < boardSize && complete; row++) {
+        for (let col = 0; col < boardSize && complete; col++) {
+          if (!current[row][col] || this.isPowerUpGem(current[row][col])) continue
+          const pick = pool.findIndex(gem => !this.wouldCreateMatch(candidate, row, col, gem.type))
+          if (pick === -1) {
+            complete = false
+            break
           }
+          candidate[row][col] = { ...pool.splice(pick, 1)[0], row, col }
         }
+      }
+
+      if (complete && !this.hasInitialMatches(candidate) && this.hasPossibleMoves(candidate)) {
+        board = candidate
       }
     }
 
-    // Ensure the reshuffled board has possible moves
-    if (!this.hasPossibleMoves(this.gameState.board)) {
-      this.forcePossibleMove(this.gameState.board)
-    }
-
+    this.gameState.board = board ?? this.createValidBoard(boardSize)
     this.emit('board:reshuffled')
-    this.emit('game:board-changed', this.gameState.board)
+    this.emit('game:board-changed', this.getGameState())
   }
 
-  // Check level completion
+  // Complete the game once the score reaches the target
   private checkLevelCompletion(): void {
-    if (this.gameState.score >= this.gameState.targetScore) {
-      this.gameState.level++
-      this.gameState.targetScore = this.calculateTargetScore(this.gameState.level)
-      this.gameState.gameStatus = 'completed'
-      
-      console.log(`🎉 Level ${this.gameState.level - 1} completed! Next target: ${this.gameState.targetScore}`)
-      
-      this.emit('game:level-completed', this.gameState.level - 1)
-    }
+    if (!this.autoComplete || this.gameState.score < this.gameState.targetScore) return
+
+    this.gameState.gameStatus = 'completed'
+    this.stopHintTimer()
+    this.emit('game:level-completed', this.gameState.level)
+  }
+
+  // Turn a random plain gem into a power-up; the caller sets it off with a self-swap through makeMove
+  placePowerUp(type: PowerUpType): { row: number; col: number } {
+    const cells = this.gameState.board.flat().filter((gem): gem is Gem => gem !== null && !this.isPowerUpGem(gem))
+    const { type: gemType, row, col } = cells[Math.floor(Math.random() * cells.length)]
+    this.gameState.board = this.gameState.board.map(line => [...line])
+    this.gameState.board[row][col] = this.createGem(gemType, row, col, true, type)
+    this.emit('game:board-changed', this.getGameState())
+    return { row, col }
   }
 
   // Legacy compatibility methods
@@ -1085,13 +1007,15 @@ export class GameEngine extends EventEmitter {
   }
 
   reset(): void {
-    const currentLevel = this.gameState.level
-    this.gameState = this.createInitialState({ level: currentLevel })
+    const { level, targetScore } = this.gameState
+    this.gameState = this.createInitialState({ level, targetScore })
     this.initialize()
     this.emit('reset')
   }
 
-  nextLevel(): void {
+  nextLevel(targetScore?: number): void {
+    this.gameState.level++
+    this.gameState.targetScore = targetScore ?? this.calculateTargetScore(this.gameState.level)
     this.gameState.gameStatus = 'playing'
     this.gameState.moves = 0
     this.gameState.comboMultiplier = 1
@@ -1107,6 +1031,7 @@ export class GameEngine extends EventEmitter {
   pause(): void {
     if (this.gameState.gameStatus === 'playing') {
       this.gameState.gameStatus = 'paused'
+      this.stopHintTimer()
       this.emit('paused')
     }
   }
@@ -1114,14 +1039,13 @@ export class GameEngine extends EventEmitter {
   resume(): void {
     if (this.gameState.gameStatus === 'paused') {
       this.gameState.gameStatus = 'playing'
+      this.startHintTimer()
       this.emit('resumed')
     }
   }
 
   cleanup(): void {
-    if (this.hintTimeout) {
-      clearTimeout(this.hintTimeout)
-    }
+    this.stopHintTimer()
     this.removeAllListeners()
     this.initialized = false
     this.isAnimating = false

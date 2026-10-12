@@ -52,6 +52,7 @@ const throttle = <T extends (...args: any[]) => any>(func: T, limit: number): T 
 
 // Check for reduced motion preference
 const prefersReducedMotion = () => {
+  if (document.documentElement.classList.contains('reduce-motion')) return true
   return window.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false
 }
 
@@ -219,7 +220,6 @@ export const usePerformanceOptimization = (userQualityMode: QualityMode = 'auto'
               
               // Only change if there's at least a 10 FPS difference from expected
               if (Math.abs(fps - currentQualityExpectedFps) > 10) {
-                console.log(`🎮 Performance: Quality changed from ${quality} to ${newQuality} (FPS: ${fps})`)
                 setQuality(newQuality)
                 lastQualityChange.current = now
                 qualityStabilityCounter.current = 0
@@ -250,13 +250,11 @@ export const usePerformanceOptimization = (userQualityMode: QualityMode = 'auto'
   const setManualQuality = useCallback((newQuality: PerformanceQuality) => {
     setQuality(newQuality)
     setIsQualityLocked(true)
-    console.log(`🎮 Performance: Quality manually locked to ${newQuality}`)
   }, [])
 
   // Function to enable auto quality
   const enableAutoQuality = useCallback(() => {
     setIsQualityLocked(false)
-    console.log('🎮 Performance: Auto quality enabled')
   }, [])
 
   const optimizedDebounce = useCallback(

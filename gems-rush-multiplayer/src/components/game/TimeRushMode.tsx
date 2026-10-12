@@ -2,618 +2,358 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Clock, Zap, Target, Flame, AlertTriangle } from 'lucide-react'
-import { GameState, Gem } from '@/types/game'
-import { GameEngine, PowerUpGem } from '@/lib/game/GameEngine'
+import { Home, Pause, Play, RotateCcw, Lightbulb, Timer } from 'lucide-react'
+import { GameState } from '@/types/game'
+import { GameEngine, HintMove, MatchGroup } from '@/lib/game/GameEngine'
 import GameBoard from './GameBoard'
 
-interface TimeRushModeProps {
-  gameEngine: GameEngine
-  onGameEnd: (finalScore: number, stats: TimeRushStats) => void
-  onPause: () => void
-  onShowMenu: () => void
-}
+const ROUND_SECONDS = 60
+const WARNING_SECONDS = 10
+const HINT_VISIBLE_MS = 5000
+const MAX_BOARD_SIZE = 600
+const BOARD_VERTICAL_MARGIN = 16
 
-interface TimeRushStats {
+export interface TimeRushStats {
   finalScore: number
   totalMatches: number
   powerUpsActivated: number
   maxCombo: number
   rushBonus: number
-  timeUsed: number
 }
 
-interface PowerUpIndicator {
-  id: string
-  type: string
-  row: number
-  col: number
-  charge: number
-  maxCharge: number
-  isReady: boolean
+interface TimeRushModeProps {
+  gameEngine: GameEngine
+  onGameEnd: (finalScore: number, stats: TimeRushStats) => void
+  onPlayAgain: () => void
+  onShowMenu: () => void
+  canPlayAgain: boolean
+  hintsEnabled: boolean
 }
 
-export default function TimeRushMode({ gameEngine, onGameEnd, onPause, onShowMenu }: TimeRushModeProps) {
-  const [gameState, setGameState] = useState<GameState | null>(null)
-  const [timeRemaining, setTimeRemaining] = useState(60) // 60 seconds
-  const [isActive, setIsActive] = useState(false)
-  const [rushMultiplier, setRushMultiplier] = useState(1.0)
-  const [powerUps, setPowerUps] = useState<PowerUpIndicator[]>([])
-  const [adrenalineMode, setAdrenalineMode] = useState(false)
-  const [warningMode, setWarningMode] = useState(false)
+type Hint = { from: { row: number; col: number }; to: { row: number; col: number } }
+
+interface Live {
+  score: number
+  matches: number
+  powerUps: number
+  maxCombo: number
+}
+
+const formatTime = (seconds: number): string =>
+  `${Math.floor(seconds / 60)}:${(seconds % 60).toString().padStart(2, '0')}`
+
+export default function TimeRushMode({
+  gameEngine,
+  onGameEnd,
+  onPlayAgain,
+  onShowMenu,
+  canPlayAgain,
+  hintsEnabled
+}: TimeRushModeProps) {
+  const [gameState, setGameState] = useState<GameState>(() => gameEngine.getGameState())
+  const [timeRemaining, setTimeRemaining] = useState(ROUND_SECONDS)
+  const [phase, setPhase] = useState<'playing' | 'paused' | 'ended'>('playing')
+  const [live, setLive] = useState<Live>({ score: 0, matches: 0, powerUps: 0, maxCombo: 1 })
   const [finalStats, setFinalStats] = useState<TimeRushStats | null>(null)
-  
-  const timerRef = useRef<NodeJS.Timeout | null>(null)
-  const backgroundRef = useRef<HTMLDivElement>(null)
-  const [totalMatches, setTotalMatches] = useState(0)
-  const [powerUpsActivated, setPowerUpsActivated] = useState(0)
-  const [maxCombo, setMaxCombo] = useState(1)
-  const [startTime] = useState(Date.now())
+  const [currentHint, setCurrentHint] = useState<Hint | null>(null)
+  const [boardSize, setBoardSize] = useState(0)
 
-  // Helper function to check if a gem is a power-up
-  const isPowerUpGem = useCallback((gem: Gem | null): boolean => {
-    if (!gem) return false
-    return 'isPowerUp' in gem && gem.isPowerUp === true
+  // The engine's events and the end-of-round effect read the latest values from here
+  const liveRef = useRef(live)
+  const endedRef = useRef(false)
+  const busyRef = useRef(false)
+  const hintTimerRef = useRef<NodeJS.Timeout | null>(null)
+  const boardAreaRef = useRef<HTMLDivElement>(null)
+  // Where the current second started and how much of it a pause already used
+  const tickStartRef = useRef(0)
+  const tickCarryRef = useRef(0)
+
+  const updateLive = useCallback((patch: (prev: Live) => Partial<Live>) => {
+    liveRef.current = { ...liveRef.current, ...patch(liveRef.current) }
+    setLive(liveRef.current)
   }, [])
 
-  // Enhanced scoring system for Time Rush
-  const calculateTimeRushScore = useCallback((matchSize: number, comboLevel: number): number => {
-    let baseScore: number
-    
-    switch (matchSize) {
-      case 3:
-        baseScore = 100 // Increased from 50
-        break
-      case 4:
-        baseScore = 300 // Increased from 150 - Lightning power-up
-        break
-      case 5:
-        baseScore = 600 // Increased from 300 - Rainbow power-up  
-        break
-      case 6:
-        baseScore = 1000 // Increased from 500 - Bomb power-up
-        break
-      default:
-        baseScore = 1500 + (matchSize - 6) * 250 // Meteor power-up
-        break
+  const clearHint = useCallback(() => {
+    if (hintTimerRef.current) {
+      clearTimeout(hintTimerRef.current)
+      hintTimerRef.current = null
     }
-
-    // Time Rush multipliers
-    const comboMultiplier = Math.min(comboLevel * 0.5 + 1, 5.0)
-    const rushMultiplier = timeRemaining <= 15 ? 2.0 : timeRemaining <= 30 ? 1.5 : 1.0
-    
-    return Math.floor(baseScore * comboMultiplier * rushMultiplier)
-  }, [timeRemaining])
-
-  // Start the timer
-  const startTimer = useCallback(() => {
-    if (timerRef.current) return
-    
-    setIsActive(true)
-    timerRef.current = setInterval(() => {
-      setTimeRemaining(prev => {
-        const newTime = prev - 1
-        
-        // Adrenaline mode at 15 seconds
-        if (newTime === 15) {
-          setAdrenalineMode(true)
-        }
-        
-        // Warning mode at 10 seconds
-        if (newTime === 10) {
-          setWarningMode(true)
-        }
-        
-        // Game over
-        if (newTime <= 0) {
-          endGame()
-          return 0
-        }
-        
-        return newTime
-      })
-    }, 1000)
+    setCurrentHint(null)
   }, [])
 
-  // End the game
-  const endGame = useCallback(() => {
-    try {
-      if (timerRef.current) {
-        clearInterval(timerRef.current)
-        timerRef.current = null
-      }
-      
-      setIsActive(false)
-      
-      const finalScore = gameState?.score || 0
-      const rushBonus = Math.floor(finalScore * 0.1) // 10% rush bonus
-      
-      const stats: TimeRushStats = {
-        finalScore,
-        totalMatches: totalMatches || 0,
-        powerUpsActivated: powerUpsActivated || 0,
-        maxCombo: maxCombo || 1,
-        rushBonus,
-        timeUsed: Math.max(0, 60 - timeRemaining)
-      }
-      
-      setFinalStats(stats)
-      setTimeout(() => {
-        try {
-          onGameEnd(finalScore, stats)
-        } catch (error) {
-          console.error('Error calling onGameEnd:', error)
-        }
-      }, 2000)
-    } catch (error) {
-      console.error('Error ending game:', error)
-      // Fallback: still try to call onGameEnd with safe values
-      const safeStats: TimeRushStats = {
-        finalScore: 0,
-        totalMatches: 0,
-        powerUpsActivated: 0,
-        maxCombo: 1,
-        rushBonus: 0,
-        timeUsed: 60
-      }
-      onGameEnd(0, safeStats)
-    }
-  }, [gameState, totalMatches, powerUpsActivated, maxCombo, timeRemaining, onGameEnd])
-
-  // Initialize game when component mounts
+  // Engine events: the board and score arrive as a full GameState, matches as MatchGroup[]
   useEffect(() => {
-    if (gameEngine) {
-      // Get initial game state from the already-initialized engine
-      const initialState = gameEngine.getGameState()
-      setGameState(initialState)
-      startTimer()
+    const onBoardChanged = (state: GameState) => {
+      if (endedRef.current) return
+      setGameState(state)
+      updateLive(prev => ({ score: state.score, maxCombo: Math.max(prev.maxCombo, state.comboMultiplier) }))
     }
-    
-    return () => {
-      if (timerRef.current) {
-        clearInterval(timerRef.current)
-      }
+    const onMatchFound = (groups: MatchGroup[]) => {
+      if (endedRef.current) return
+      updateLive(prev => ({ matches: prev.matches + groups.length }))
     }
-  }, [gameEngine, startTimer])
-
-  // Set up GameEngine event listeners
-  useEffect(() => {
-    if (!gameEngine) return
-
-    const handleStateChange = (newState: GameState) => {
-      try {
-        setGameState(newState)
-        
-        // Track max combo with null check
-        if (newState?.comboMultiplier && newState.comboMultiplier > maxCombo) {
-          setMaxCombo(newState.comboMultiplier)
-        }
-      } catch (error) {
-        console.error('Error handling state change:', error)
-      }
+    const onPowerUpActivated = () => {
+      if (endedRef.current) return
+      updateLive(prev => ({ powerUps: prev.powerUps + 1 }))
+    }
+    const onHintShow = (hint: HintMove) => {
+      if (hintTimerRef.current) clearTimeout(hintTimerRef.current)
+      setCurrentHint({ from: hint.from, to: hint.to })
+      hintTimerRef.current = setTimeout(clearHint, HINT_VISIBLE_MS)
     }
 
-    const handleMatchFound = (matches: any[]) => {
-      try {
-        if (Array.isArray(matches)) {
-          setTotalMatches(prev => prev + matches.length)
-          
-          // Check for power-ups created from large matches
-          matches.forEach(match => {
-            if (match?.length >= 4) {
-              const powerUpType = match.length === 4 ? 'lightning' : 
-                                match.length === 5 ? 'rainbow' : 'bomb'
-              
-              // Add power-up to tracking with error handling
-              setPowerUps(prev => [...prev, {
-                id: `${Date.now()}-${Math.random()}`,
-                type: powerUpType,
-                row: match[0]?.row || 0,
-                col: match[0]?.col || 0,
-                charge: 100,
-                maxCharge: 100,
-                isReady: true
-              }])
-            }
-          })
-        }
-      } catch (error) {
-        console.error('Error handling matches found:', error)
-      }
-    }
-
-    const handlePowerUpActivated = () => {
-      try {
-        setPowerUpsActivated(prev => prev + 1)
-      } catch (error) {
-        console.error('Error handling power-up activation:', error)
-      }
-    }
-
-    // Set up event listeners with error handling
-    try {
-      gameEngine.on('game:board-changed', handleStateChange)
-      gameEngine.on('game:match-found', handleMatchFound)
-      gameEngine.on('game:powerup-activated', handlePowerUpActivated)
-    } catch (error) {
-      console.error('Error setting up event listeners:', error)
-    }
+    gameEngine.on('game:board-changed', onBoardChanged)
+    gameEngine.on('game:match-found', onMatchFound)
+    gameEngine.on('game:powerup-activated', onPowerUpActivated)
+    gameEngine.on('hint:show', onHintShow)
+    gameEngine.on('hint:hide', clearHint)
 
     return () => {
-      try {
-        gameEngine.off('game:board-changed', handleStateChange)
-        gameEngine.off('game:match-found', handleMatchFound)
-        gameEngine.off('game:powerup-activated', handlePowerUpActivated)
-      } catch (error) {
-        console.error('Error removing event listeners:', error)
-      }
+      gameEngine.off('game:board-changed', onBoardChanged)
+      gameEngine.off('game:match-found', onMatchFound)
+      gameEngine.off('game:powerup-activated', onPowerUpActivated)
+      gameEngine.off('hint:show', onHintShow)
+      gameEngine.off('hint:hide', clearHint)
+      if (hintTimerRef.current) clearTimeout(hintTimerRef.current)
     }
-  }, [gameEngine, maxCombo])
+  }, [gameEngine, updateLive, clearHint])
 
-  // Handle gem moves
-  const handleMove = useCallback((fromRow: number, fromCol: number, toRow: number, toCol: number) => {
-    if (!gameEngine || !gameState || !isActive) return
-    
-    gameEngine.makeMove(fromRow, fromCol, toRow, toCol).then((result) => {
-      if (result.valid) {
-        // Update local state with new board and score
-        setGameState(prevState => {
-          if (!prevState) return null
-          
-          const newScore = prevState.score + result.scoreChange
-          
-          return {
-            ...prevState,
-            board: result.newBoard,
-            score: newScore,
-            moves: prevState.moves + 1,
-            matchesFound: result.matchesFound,
-            comboMultiplier: result.comboCount > 0 ? result.comboCount : 1,
-            lastMoveScore: result.scoreChange
-          }
-        })
-      }
+  // The clock only runs while playing
+  useEffect(() => {
+    if (phase !== 'playing') return
+    let timer: ReturnType<typeof setTimeout>
+    const schedule = (delay: number) => {
+      tickStartRef.current = Date.now()
+      timer = setTimeout(() => {
+        tickCarryRef.current = 0
+        setTimeRemaining(prev => Math.max(0, prev - 1))
+        schedule(1000)
+      }, delay)
+    }
+    schedule(1000 - tickCarryRef.current)
+    return () => {
+      clearTimeout(timer)
+      tickCarryRef.current = Math.min(999, tickCarryRef.current + Date.now() - tickStartRef.current)
+    }
+  }, [phase])
+
+  // Time is up: lock the engine and settle the round once
+  useEffect(() => {
+    if (timeRemaining > 0 || endedRef.current) return
+    endedRef.current = true
+
+    gameEngine.pause()
+    clearHint()
+    setPhase('ended')
+
+    const { score, matches, powerUps, maxCombo } = liveRef.current
+    const stats: TimeRushStats = {
+      finalScore: score,
+      totalMatches: matches,
+      powerUpsActivated: powerUps,
+      maxCombo,
+      rushBonus: Math.floor(score * 0.1)
+    }
+    setFinalStats(stats)
+    onGameEnd(score, stats)
+  }, [timeRemaining, gameEngine, clearHint, onGameEnd])
+
+  // The board takes the largest square the space under the HUD allows
+  useEffect(() => {
+    const area = boardAreaRef.current
+    if (!area) return
+    const observer = new ResizeObserver(([entry]) => {
+      const { width, height } = entry.contentRect
+      setBoardSize(Math.max(0, Math.floor(Math.min(width, height - BOARD_VERTICAL_MARGIN, MAX_BOARD_SIZE))))
     })
-  }, [gameEngine, gameState, isActive])
+    observer.observe(area)
+    return () => observer.disconnect()
+  }, [])
 
-  // Handle power-up click
-  const handlePowerUpClick = useCallback((row: number, col: number) => {
-    if (!gameState || !isActive) return
-    
-    const gem = gameState.board[row]?.[col]
-    if (!gem || !('isPowerUp' in gem) || !gem.isPowerUp) return
-    
-    // Activate power-up through game engine
-    gameEngine.makeMove(row, col, row, col) // Self-click to activate
-    
-    // Remove from power-up tracking
-    setPowerUps(prev => prev.filter(p => !(p.row === row && p.col === col)))
-  }, [gameState, isActive, gameEngine])
+  const play = useCallback((fromRow: number, fromCol: number, toRow: number, toCol: number) => {
+    if (phase !== 'playing' || busyRef.current) return
+    busyRef.current = true
+    gameEngine.makeMove(fromRow, fromCol, toRow, toCol).finally(() => {
+      busyRef.current = false
+    })
+  }, [phase, gameEngine])
 
-  const formatTime = (seconds: number): string => {
-    const mins = Math.floor(seconds / 60)
-    const secs = seconds % 60
-    return `${mins}:${secs.toString().padStart(2, '0')}`
+  // Clicking a power-up fires it in place
+  const handlePowerUpClick = useCallback((row: number, col: number) => play(row, col, row, col), [play])
+
+  const togglePause = () => {
+    if (phase === 'playing') {
+      gameEngine.pause()
+      clearHint()
+      setPhase('paused')
+    } else if (phase === 'paused') {
+      gameEngine.resume()
+      setPhase('playing')
+    }
   }
 
-  if (!gameState) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-gradient-to-br from-red-900 via-orange-900 to-yellow-900">
-        <div className="text-white text-2xl">Initializing Time Rush...</div>
-      </div>
-    )
-  }
+  const warning = timeRemaining <= WARNING_SECONDS
+  const timePct = (timeRemaining / ROUND_SECONDS) * 100
 
   return (
-    <div className="relative min-h-screen overflow-hidden">
-      {/* Enhanced Dynamic Background */}
+    <div className="relative flex h-dvh flex-col overflow-hidden bg-ink page-glow">
+      {/* Top bar */}
       <motion.div
-        ref={backgroundRef}
-        className={`absolute inset-0 transition-all duration-1000 ${
-          adrenalineMode
-            ? 'bg-gradient-to-br from-red-900 via-orange-800 to-yellow-700'
-            : warningMode
-            ? 'bg-gradient-to-br from-red-800 via-orange-700 to-red-600'
-            : 'bg-gradient-to-br from-orange-900 via-red-900 to-purple-900'
-        }`}
-        animate={{
-          scale: adrenalineMode ? [1, 1.02, 1] : [1, 1.01, 1],
-        }}
-        transition={{
-          duration: adrenalineMode ? 0.5 : 2,
-          repeat: Infinity,
-          type: "tween",
-          ease: "easeInOut"
-        }}
-      >
-        {/* Animated background elements */}
-        <div className="absolute inset-0 overflow-hidden">
-          {[...Array(20)].map((_, i) => (
-            <motion.div
-              key={i}
-              className={`absolute w-2 h-2 rounded-full ${
-                adrenalineMode ? 'bg-yellow-400' : 'bg-orange-400'
-              }`}
-              style={{
-                left: `${Math.random() * 100}%`,
-                top: `${Math.random() * 100}%`,
-              }}
-              animate={{
-                y: [0, -100, 0],
-                opacity: [0, 1, 0],
-                scale: [0, 1.5, 0],
-              }}
-              transition={{
-                duration: 2 + Math.random() * 2,
-                repeat: Infinity,
-                delay: Math.random() * 2,
-                type: "tween",
-              }}
-            />
-          ))}
-        </div>
-
-        {/* Pulse overlay for adrenaline mode */}
-        <AnimatePresence>
-          {adrenalineMode && (
-            <motion.div
-              className="absolute inset-0 bg-red-500/20"
-              initial={{ opacity: 0 }}
-              animate={{ opacity: [0, 0.3, 0] }}
-              exit={{ opacity: 0 }}
-              transition={{ duration: 0.8, repeat: Infinity, type: "tween" }}
-            />
-          )}
-        </AnimatePresence>
-      </motion.div>
-
-      {/* Header with Timer and Stats */}
-      <motion.div
-        className="relative z-10 p-4 md:p-6"
-        initial={{ y: -50, opacity: 0 }}
+        className="relative z-10 flex h-14 shrink-0 items-center justify-between px-4 md:px-6"
+        initial={{ y: -8, opacity: 0 }}
         animate={{ y: 0, opacity: 1 }}
-        transition={{ duration: 0.5 }}
+        transition={{ duration: 0.25 }}
       >
-        <div className="flex justify-between items-center mb-4">
-          {/* Timer - Large and prominent */}
-          <motion.div
-            className={`flex items-center gap-3 px-6 py-4 rounded-2xl border-2 transition-all duration-300 ${
-              warningMode
-                ? 'bg-red-500/20 border-red-400 text-red-100'
-                : adrenalineMode
-                ? 'bg-orange-500/20 border-orange-400 text-orange-100'
-                : 'bg-white/10 border-white/30 text-white'
-            }`}
-            animate={{
-              scale: warningMode ? [1, 1.05, 1] : 1,
-              boxShadow: warningMode 
-                ? ['0 0 0 0 rgba(239, 68, 68, 0.4)', '0 0 0 8px rgba(239, 68, 68, 0)', '0 0 0 0 rgba(239, 68, 68, 0.4)']
-                : '0 0 0 0 rgba(239, 68, 68, 0)'
-            }}
-            transition={{
-              scale: { duration: 0.5, repeat: warningMode ? Infinity : 0, type: warningMode ? "tween" : "spring" },
-              boxShadow: { duration: 1, repeat: warningMode ? Infinity : 0, type: warningMode ? "tween" : "spring" }
-            }}
-          >
-            <Clock className={`w-8 h-8 ${warningMode ? 'text-red-400' : adrenalineMode ? 'text-orange-400' : 'text-blue-400'}`} />
-            <div>
-              <div className="text-xs opacity-80">TIME REMAINING</div>
-              <div className="text-3xl font-bold font-mono">{formatTime(timeRemaining)}</div>
-            </div>
-            {adrenalineMode && (
-              <motion.div
-                animate={{ rotate: [0, 10, -10, 0] }}
-                transition={{ duration: 0.3, repeat: Infinity, type: "tween" }}
-              >
-                <Flame className="w-6 h-6 text-red-400" />
-              </motion.div>
-            )}
-          </motion.div>
-
-          {/* Mode Indicator */}
-          <motion.div
-            className="flex items-center gap-3 px-4 py-2 bg-gradient-to-r from-red-600 to-orange-600 rounded-xl text-white font-bold"
-            animate={{ scale: [1, 1.02, 1] }}
-            transition={{ duration: 2, repeat: Infinity, type: "tween" }}
-          >
-            <Zap className="w-5 h-5" />
-            <span>TIME RUSH</span>
-            {adrenalineMode && <AlertTriangle className="w-5 h-5 text-yellow-400" />}
-          </motion.div>
-
-          {/* Menu Button */}
-          <button
-            onClick={onShowMenu}
-            className="px-4 py-2 bg-white/10 backdrop-blur-md rounded-xl border border-white/20 text-white hover:bg-white/20 transition-all duration-200"
-          >
-            Menu
+        <div className="flex items-center gap-2">
+          <button onClick={onShowMenu} className="btn btn-icon btn-ghost" aria-label="Menu">
+            <Home size={20} />
           </button>
         </div>
 
-        {/* Enhanced Stats Bar */}
-        <motion.div
-          className="grid grid-cols-2 md:grid-cols-5 gap-4 p-4 bg-black/20 backdrop-blur-md rounded-2xl border border-white/20"
-          initial={{ y: 20, opacity: 0 }}
-          animate={{ y: 0, opacity: 1 }}
-          transition={{ delay: 0.2 }}
-        >
-          <div className="text-center">
-            <div className="text-xs text-white/70">SCORE</div>
-            <motion.div
-              className="text-2xl font-bold text-yellow-400"
-              key={gameState?.score || 0}
-              initial={{ scale: 1.2 }}
-              animate={{ scale: 1 }}
-              transition={{ duration: 0.2 }}
-            >
-              {(gameState?.score || 0).toLocaleString()}
-            </motion.div>
-          </div>
+        <div className="text-center">
+          <div className="text-sm font-semibold text-fg">Gems Rush</div>
+          <div className="text-xs text-fg-muted">Time Rush</div>
+        </div>
 
-          <div className="text-center">
-            <div className="text-xs text-white/70">COMBO</div>
-            <div className="text-2xl font-bold text-orange-400">
-              {(gameState?.comboMultiplier || 1).toFixed(1)}x
-            </div>
-          </div>
-
-          <div className="text-center">
-            <div className="text-xs text-white/70">MATCHES</div>
-            <div className="text-2xl font-bold text-green-400">
-              {totalMatches || 0}
-            </div>
-          </div>
-
-          <div className="text-center">
-            <div className="text-xs text-white/70">POWER-UPS</div>
-            <div className="text-2xl font-bold text-purple-400">
-              {powerUpsActivated || 0}
-            </div>
-          </div>
-
-          <div className="text-center">
-            <div className="text-xs text-white/70">RUSH BONUS</div>
-            <div className="text-2xl font-bold text-red-400">
-              {timeRemaining <= 15 ? '2.0x' : timeRemaining <= 30 ? '1.5x' : '1.0x'}
-            </div>
-          </div>
-        </motion.div>
-      </motion.div>
-
-      {/* Enhanced Game Board */}
-      <div className="relative z-10 flex justify-center px-4">
-        <motion.div
-          className="relative"
-          animate={{
-            filter: adrenalineMode ? 'brightness(1.2) contrast(1.1)' : 'brightness(1) contrast(1)',
-          }}
-          transition={{ duration: 0.3 }}
-        >
-          <GameBoard
-            gameState={gameState}
-            onMove={handleMove}
-            disabled={!isActive}
-            onGemClick={handlePowerUpClick}
-            timeRushMode={true}
-            adrenalineMode={adrenalineMode}
-          />
-
-          {/* Power-up Click Indicators */}
-          <AnimatePresence>
-            {powerUps.map(powerUp => (
-              <motion.div
-                key={powerUp.id}
-                className={`absolute pointer-events-none z-20 w-16 h-16 rounded-full border-4 ${
-                  powerUp.type === 'lightning' ? 'border-blue-400 bg-blue-500/30' :
-                  powerUp.type === 'rainbow' ? 'border-purple-400 bg-purple-500/30' :
-                  'border-red-400 bg-red-500/30'
-                }`}
-                style={{
-                  left: `${powerUp.col * 12.5}%`,
-                  top: `${powerUp.row * 12.5}%`,
-                  transform: 'translate(-50%, -50%)'
-                }}
-                initial={{ scale: 0, opacity: 0 }}
-                animate={{ 
-                  scale: [1, 1.1, 1], 
-                  opacity: 1,
-                  boxShadow: [
-                    '0 0 0 0 rgba(59, 130, 246, 0.4)',
-                    '0 0 0 10px rgba(59, 130, 246, 0)',
-                    '0 0 0 0 rgba(59, 130, 246, 0.4)'
-                  ]
-                }}
-                exit={{ scale: 0, opacity: 0 }}
-                transition={{ 
-                  scale: { duration: 1, repeat: Infinity, type: "tween" },
-                  boxShadow: { duration: 1.5, repeat: Infinity, type: "tween" }
-                }}
-              >
-                <div className="absolute inset-0 flex items-center justify-center text-white font-bold text-xs">
-                  CLICK!
-                </div>
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </motion.div>
-      </div>
-
-      {/* Time Rush Instructions */}
-      <motion.div
-        className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:bottom-4 max-w-md p-4 bg-black/40 backdrop-blur-md rounded-xl border border-white/20 text-white"
-        initial={{ y: 100, opacity: 0 }}
-        animate={{ y: 0, opacity: 1 }}
-        transition={{ delay: 1 }}
-      >
-        <div className="text-sm space-y-2">
-          <div className="font-bold text-orange-400">⚡ TIME RUSH TIPS:</div>
-          <div>• 4+ matches create clickable power-ups</div>
-          <div>• Click power-ups to activate instantly</div>
-          <div>• Rush bonus at 30s & 15s remaining</div>
-          <div>• Chain combos for massive scores!</div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={togglePause}
+            disabled={phase === 'ended'}
+            className="btn btn-icon btn-ghost"
+            aria-label={phase === 'paused' ? 'Resume' : 'Pause'}
+          >
+            {phase === 'paused' ? <Play size={20} /> : <Pause size={20} />}
+          </button>
         </div>
       </motion.div>
 
-      {/* Time Rush Mode Instructions */}
+      {/* HUD */}
       <motion.div
-        className="mt-4 text-center text-white/80 text-sm"
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1 }}
+        className="card relative z-10 mx-4 mt-2 w-[calc(100%-2rem)] max-w-[560px] shrink-0 self-center p-4"
+        initial={{ y: 8, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
+        transition={{ duration: 0.25, delay: 0.05 }}
       >
-        {gameState?.board && Array.isArray(gameState.board) && 
-         gameState.board.some(row => Array.isArray(row) && row.some(gem => gem && isPowerUpGem(gem))) && (
-          <div className="text-yellow-400 font-semibold">
-            ⚡ Click power-ups to activate instantly!
+        <div className="grid grid-cols-2 gap-4 text-center sm:grid-cols-4">
+          <div>
+            <div className="stat-label">Time</div>
+            <div className={`stat-value ${warning ? 'text-bad' : 'text-fg'}`} data-testid="time-remaining">
+              {formatTime(timeRemaining)}
+            </div>
+            {phase === 'paused' && <div className="text-xs text-fg-dim">Paused</div>}
           </div>
-        )}
+          <div>
+            <div className="stat-label">Score</div>
+            <div className="stat-value text-gold" data-testid="score">{live.score.toLocaleString()}</div>
+            {gameState.lastMoveScore > 0 && (
+              <div className="text-xs font-semibold text-good">+{gameState.lastMoveScore}</div>
+            )}
+          </div>
+          <div>
+            <div className="stat-label">Matches</div>
+            <div className="stat-value text-fg" data-testid="matches">{live.matches}</div>
+          </div>
+          <div>
+            <div className="stat-label">Combo</div>
+            <div className="stat-value text-violet">{gameState.comboMultiplier.toFixed(1)}x</div>
+          </div>
+        </div>
+
+        <div className="mt-4 h-1.5 w-full overflow-hidden rounded-full bg-ink-2">
+          <div
+            className={`h-full rounded-full transition-[width] duration-1000 ease-linear ${warning ? 'bg-bad' : 'bg-violet'}`}
+            style={{ width: `${timePct}%` }}
+          />
+        </div>
       </motion.div>
 
-      {/* Game Over Screen */}
+      {/* Board */}
+      <div ref={boardAreaRef} className="relative z-10 flex min-h-0 flex-1 items-center justify-center px-4">
+        {boardSize > 0 && (
+          <GameBoard
+            gameState={gameState}
+            size={boardSize}
+            onMove={play}
+            onPowerUpClick={handlePowerUpClick}
+            disabled={phase !== 'playing'}
+            currentHint={currentHint}
+          />
+        )}
+      </div>
+
+      {/* Controls */}
+      <div className="relative z-10 flex shrink-0 justify-center gap-3 px-4 pb-4">
+        <button onClick={onPlayAgain} disabled={!canPlayAgain} className="btn btn-secondary" aria-label="Restart">
+          <RotateCcw size={18} />
+          <span className="hidden sm:inline">Restart</span>
+        </button>
+        {hintsEnabled && (
+          <button
+            onClick={() => gameEngine.showHint()}
+            disabled={phase !== 'playing'}
+            className="btn btn-secondary"
+            aria-label="Hint"
+          >
+            <Lightbulb size={18} />
+            <span className="hidden sm:inline">Hint</span>
+          </button>
+        )}
+      </div>
+
+      {/* Results: stays until the player chooses */}
       <AnimatePresence>
         {finalStats && (
           <motion.div
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-ink/80 backdrop-blur-sm"
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
             <motion.div
-              className="bg-gradient-to-br from-purple-900 to-red-900 p-8 rounded-3xl border border-white/20 max-w-md w-full mx-4 text-center"
-              initial={{ scale: 0.8, y: 50 }}
-              animate={{ scale: 1, y: 0 }}
-              exit={{ scale: 0.8, y: 50 }}
+              role="dialog"
+              aria-modal="true"
+              aria-labelledby="time-rush-results-title"
+              className="card mx-4 w-full max-w-md p-8 text-center"
+              initial={{ scale: 0.95, y: 20, opacity: 0 }}
+              animate={{ scale: 1, y: 0, opacity: 1 }}
+              exit={{ scale: 0.95, y: 20, opacity: 0 }}
+              transition={{ duration: 0.25 }}
             >
-              <div className="text-6xl mb-4">⚡</div>
-              <h2 className="text-3xl font-bold text-white mb-6">Time's Up!</h2>
-              
-              <div className="space-y-4 text-white">
+              <Timer className="mx-auto mb-4 text-violet" size={40} />
+              <h2 id="time-rush-results-title" className="mb-6 text-2xl font-bold text-fg">Time&apos;s up</h2>
+
+              <div className="space-y-3 text-sm">
                 <div className="flex justify-between">
-                  <span>Final Score:</span>
-                  <span className="font-bold text-yellow-400">{(finalStats?.finalScore || 0).toLocaleString()}</span>
+                  <span className="text-fg-muted">Final score</span>
+                  <span className="font-semibold text-gold" data-testid="final-score">{finalStats.finalScore.toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Total Matches:</span>
-                  <span className="font-bold">{finalStats?.totalMatches || 0}</span>
+                  <span className="text-fg-muted">Total matches</span>
+                  <span className="font-semibold text-fg">{finalStats.totalMatches}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Power-ups Used:</span>
-                  <span className="font-bold">{finalStats?.powerUpsActivated || 0}</span>
+                  <span className="text-fg-muted">Power-ups used</span>
+                  <span className="font-semibold text-fg">{finalStats.powerUpsActivated}</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Max Combo:</span>
-                  <span className="font-bold text-orange-400">{(finalStats?.maxCombo || 1).toFixed(1)}x</span>
+                  <span className="text-fg-muted">Max combo</span>
+                  <span className="font-semibold text-violet">{finalStats.maxCombo.toFixed(1)}x</span>
                 </div>
                 <div className="flex justify-between">
-                  <span>Rush Bonus:</span>
-                  <span className="font-bold text-red-400">+{(finalStats?.rushBonus || 0).toLocaleString()}</span>
+                  <span className="text-fg-muted">Rush bonus (coins and XP)</span>
+                  <span className="font-semibold text-good">+{finalStats.rushBonus.toLocaleString()}</span>
                 </div>
               </div>
 
-              <div className="mt-6 pt-4 border-t border-white/20">
-                <div className="text-sm text-white/70">
-                  Time Used: {Math.floor((finalStats?.timeUsed || 0) / 60)}:{((finalStats?.timeUsed || 0) % 60).toString().padStart(2, '0')}
-                </div>
+              <div className="mt-6 flex justify-center gap-3">
+                <button onClick={onPlayAgain} disabled={!canPlayAgain} className="btn btn-primary" autoFocus>
+                  <RotateCcw size={18} />
+                  <span>Play again</span>
+                </button>
+                <button onClick={onShowMenu} className="btn btn-secondary">
+                  <Home size={18} />
+                  <span>Menu</span>
+                </button>
               </div>
             </motion.div>
           </motion.div>
@@ -621,4 +361,4 @@ export default function TimeRushMode({ gameEngine, onGameEnd, onPause, onShowMen
       </AnimatePresence>
     </div>
   )
-} 
+}
