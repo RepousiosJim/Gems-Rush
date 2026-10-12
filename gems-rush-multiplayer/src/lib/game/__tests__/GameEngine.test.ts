@@ -1,5 +1,5 @@
-import { GameEngine } from '../GameEngine'
-import { Gem, GemType } from '@/types/game'
+import { GameEngine, MatchGroup } from '../GameEngine'
+import { Gem, GemType, GameState } from '@/types/game'
 import { GAME_CONFIG } from '../constants'
 
 describe('GameEngine', () => {
@@ -173,6 +173,105 @@ describe('GameEngine', () => {
     })
   })
 
+  describe('events', () => {
+    beforeEach(async () => {
+      await gameEngine.initialize()
+      setBoard(gameEngine, createBoardWithMove())
+    })
+
+    it('emits board-changed with the full game state', async () => {
+      const states: GameState[] = []
+      gameEngine.on('game:board-changed', (state: GameState) => states.push(state))
+
+      const result = await gameEngine.makeMove(0, 2, 0, 3)
+
+      expect(states.length).toBeGreaterThan(0)
+      const last = states[states.length - 1]
+      expect(last.board).toHaveLength(8)
+      expect(last.score).toBe(result.scoreChange)
+      expect(last.moves).toBe(1)
+      expect(last.gameStatus).toBeDefined()
+    })
+
+    it('emits match-found with the matched groups', async () => {
+      const found: MatchGroup[][] = []
+      gameEngine.on('game:match-found', (groups: MatchGroup[]) => found.push(groups))
+
+      await gameEngine.makeMove(0, 2, 0, 3)
+
+      expect(found.length).toBeGreaterThan(0)
+      expect(found[0][0].gems.length).toBeGreaterThanOrEqual(3)
+      expect(found[0][0].gems.every(gem => gem.type === 'fire')).toBe(true)
+    })
+
+    it('does not emit anything for a move that makes no match', async () => {
+      setBoard(gameEngine, createCalmBoard())
+      const handler = jest.fn()
+      gameEngine.on('game:match-found', handler)
+      gameEngine.on('game:board-changed', handler)
+
+      await gameEngine.makeMove(0, 0, 0, 1)
+
+      expect(handler).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('power-ups', () => {
+    beforeEach(async () => {
+      await gameEngine.initialize()
+    })
+
+    const isAnimating = () => (gameEngine as unknown as { isAnimating: boolean }).isAnimating
+
+    it('writes the result of a self-click activation back into engine state', async () => {
+      const board = createCalmBoard()
+      withPowerUp(board, 4, 4, 'bomb')
+      setBoard(gameEngine, board)
+      const states: GameState[] = []
+      gameEngine.on('game:board-changed', (state: GameState) => states.push(state))
+
+      const result = await gameEngine.makeMove(4, 4, 4, 4)
+      const state = gameEngine.getGameState()
+
+      expect(result.valid).toBe(true)
+      expect(result.scoreChange).toBeGreaterThanOrEqual(900)
+      expect(state.score).toBe(result.scoreChange)
+      expect(state.moves).toBe(1)
+      expect(state.board).toBe(result.newBoard)
+      expect(state.board).not.toBe(board)
+      expect(gameEngine.findMatches(state.board)).toHaveLength(0)
+      expectCoordinatesMatchPositions(state.board)
+      expect(states.length).toBeGreaterThanOrEqual(1)
+      expect(isAnimating()).toBe(false)
+    })
+
+    it('activates when only the destination gem is the power-up', async () => {
+      const board = createCalmBoard()
+      withPowerUp(board, 4, 5, 'rainbow')
+      const targetType = board[4][4]!.type
+      const targets = board.flat().filter(gem => gem!.type === targetType).length
+      setBoard(gameEngine, board)
+      const activated = jest.fn()
+      gameEngine.on('game:powerup-activated', activated)
+
+      const result = await gameEngine.makeMove(4, 4, 4, 5)
+
+      expect(result.valid).toBe(true)
+      expect(activated).toHaveBeenCalledTimes(1)
+      expect(gameEngine.getGameState().score).toBeGreaterThanOrEqual(targets * 100)
+      expect(isAnimating()).toBe(false)
+    })
+
+    it('accepts another move after a power-up', async () => {
+      const board = createCalmBoard()
+      withPowerUp(board, 4, 4, 'lightning')
+      setBoard(gameEngine, board)
+
+      await gameEngine.makeMove(4, 4, 4, 4)
+      await expect(gameEngine.makeMove(0, 0, 0, 1)).resolves.toBeDefined()
+    })
+  })
+
   describe('move validation', () => {
     beforeEach(async () => {
       await gameEngine.initialize()
@@ -282,6 +381,10 @@ function createBoardWithMove(): (Gem | null)[][] {
   board[0][1] = { ...board[0][1]!, type: 'fire' }
   board[0][3] = { ...board[0][3]!, type: 'fire' }
   return board
+}
+
+function withPowerUp(board: (Gem | null)[][], row: number, col: number, powerUpType: string): void {
+  board[row][col] = { ...board[row][col]!, powerUpType, isPowerUp: true } as Gem
 }
 
 function setBoard(engine: GameEngine, board: (Gem | null)[][]) {
