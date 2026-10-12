@@ -154,11 +154,11 @@ export function GameGuideModal({ isOpen, onClose }: { isOpen: boolean; onClose: 
   ]
 
   const modes = [
-    { name: 'Classic', icon: Target, desc: 'No time pressure. Focus on strategy and planning your moves carefully.' },
-    { name: 'Time Rush', icon: Clock, desc: 'Race against the clock. Score as many points as possible before time runs out.' },
-    { name: 'Daily Quest', icon: CalendarDays, desc: 'New challenges every day with special objectives and limited moves.' },
-    { name: 'Divine Conquest', icon: Swords, desc: 'Campaign mode with progressive difficulty and boss battles.' },
-    { name: 'Multiplayer', icon: Users, desc: 'Compete head to head against other players.' },
+    { name: 'Classic', icon: Target, desc: 'Levels with a move limit. Reach the goal, a score or a set number of gems per colour, before the moves run out.' },
+    { name: 'Time Rush', icon: Clock, desc: 'Score as many points as you can in 60 seconds.' },
+    { name: 'Daily Quest', icon: CalendarDays, desc: 'One round a day. Reach the target score; no move limit.' },
+    { name: 'Divine Conquest', icon: Swords, desc: 'Locked.' },
+    { name: 'Multiplayer', icon: Users, desc: 'Locked.' },
   ]
 
   return (
