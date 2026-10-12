@@ -272,6 +272,60 @@ describe('GameEngine', () => {
     })
   })
 
+  describe('target and completion', () => {
+    async function startWithMove(engine: GameEngine) {
+      gameEngine = engine
+      await engine.initialize()
+      setBoard(engine, createBoardWithMove())
+    }
+
+    it('uses the target given by the caller', async () => {
+      await startWithMove(new GameEngine({ targetScore: 1250 }))
+      expect(gameEngine.getGameState().targetScore).toBe(1250)
+    })
+
+    it('completes at the caller target, not a hardcoded one', async () => {
+      await startWithMove(new GameEngine({ targetScore: 50 }))
+      const completed = jest.fn()
+      gameEngine.on('game:level-completed', completed)
+
+      await gameEngine.makeMove(0, 2, 0, 3)
+
+      expect(gameEngine.getGameState().gameStatus).toBe('completed')
+      expect(completed).toHaveBeenCalledWith(1)
+      expect(gameEngine.getGameState().targetScore).toBe(50)
+    })
+
+    it('does not complete below the target', async () => {
+      await startWithMove(new GameEngine({ targetScore: 100000 }))
+      await gameEngine.makeMove(0, 2, 0, 3)
+      expect(gameEngine.getGameState().gameStatus).toBe('playing')
+    })
+
+    it('never completes when autoComplete is off', async () => {
+      await startWithMove(new GameEngine({ targetScore: 50 }, { autoComplete: false }))
+      const completed = jest.fn()
+      gameEngine.on('game:level-completed', completed)
+
+      await gameEngine.makeMove(0, 2, 0, 3)
+
+      expect(gameEngine.getGameState().score).toBeGreaterThanOrEqual(50)
+      expect(gameEngine.getGameState().gameStatus).toBe('playing')
+      expect(completed).not.toHaveBeenCalled()
+    })
+
+    it('keeps the caller target across reset and takes a new one on nextLevel', async () => {
+      await startWithMove(new GameEngine({ targetScore: 1250 }))
+
+      gameEngine.reset()
+      expect(gameEngine.getGameState().targetScore).toBe(1250)
+
+      gameEngine.nextLevel(1800)
+      expect(gameEngine.getGameState().level).toBe(2)
+      expect(gameEngine.getGameState().targetScore).toBe(1800)
+    })
+  })
+
   describe('move validation', () => {
     beforeEach(async () => {
       await gameEngine.initialize()

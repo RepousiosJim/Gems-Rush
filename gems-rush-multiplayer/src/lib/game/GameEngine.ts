@@ -55,6 +55,11 @@ export interface GameEngineEvents {
   'board:reshuffled': () => void
 }
 
+export interface GameEngineOptions {
+  // Complete the game when the score reaches targetScore. Turn off when the caller owns win/lose (e.g. timed mode).
+  autoComplete?: boolean
+}
+
 export class GameEngine extends EventEmitter {
   private gameState: GameState
   private animationQueue: Array<() => Promise<void>> = []
@@ -64,9 +69,11 @@ export class GameEngine extends EventEmitter {
   private moveInProgress: boolean = false
   private hintTimeout?: NodeJS.Timeout
   private lastHintTime: number = 0
+  private autoComplete: boolean
 
-  constructor(initialState?: Partial<GameState>) {
+  constructor(initialState?: Partial<GameState>, options: GameEngineOptions = {}) {
     super()
+    this.autoComplete = options.autoComplete ?? true
     this.gameState = this.createInitialState(initialState)
   }
 
@@ -938,17 +945,12 @@ export class GameEngine extends EventEmitter {
     this.emit('game:board-changed', this.getGameState())
   }
 
-  // Check level completion
+  // Complete the game once the score reaches the target
   private checkLevelCompletion(): void {
-    if (this.gameState.score >= this.gameState.targetScore) {
-      this.gameState.level++
-      this.gameState.targetScore = this.calculateTargetScore(this.gameState.level)
-      this.gameState.gameStatus = 'completed'
-      
-      console.log(`🎉 Level ${this.gameState.level - 1} completed! Next target: ${this.gameState.targetScore}`)
-      
-      this.emit('game:level-completed', this.gameState.level - 1)
-    }
+    if (!this.autoComplete || this.gameState.score < this.gameState.targetScore) return
+
+    this.gameState.gameStatus = 'completed'
+    this.emit('game:level-completed', this.gameState.level)
   }
 
   // Legacy compatibility methods
@@ -1005,13 +1007,15 @@ export class GameEngine extends EventEmitter {
   }
 
   reset(): void {
-    const currentLevel = this.gameState.level
-    this.gameState = this.createInitialState({ level: currentLevel })
+    const { level, targetScore } = this.gameState
+    this.gameState = this.createInitialState({ level, targetScore })
     this.initialize()
     this.emit('reset')
   }
 
-  nextLevel(): void {
+  nextLevel(targetScore?: number): void {
+    this.gameState.level++
+    this.gameState.targetScore = targetScore ?? this.calculateTargetScore(this.gameState.level)
     this.gameState.gameStatus = 'playing'
     this.gameState.moves = 0
     this.gameState.comboMultiplier = 1
