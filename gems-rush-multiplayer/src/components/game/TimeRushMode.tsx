@@ -283,7 +283,7 @@ export default function TimeRushMode({
 
       {/* Controls */}
       <div className="relative z-10 flex shrink-0 justify-center gap-3 px-4 pb-4">
-        <button onClick={onPlayAgain} disabled={!canPlayAgain} className="btn btn-secondary">
+        <button onClick={onPlayAgain} disabled={!canPlayAgain} className="btn btn-secondary" aria-label="Restart">
           <RotateCcw size={18} />
           <span className="hidden sm:inline">Restart</span>
         </button>
@@ -292,6 +292,7 @@ export default function TimeRushMode({
             onClick={() => gameEngine.showHint()}
             disabled={phase !== 'playing'}
             className="btn btn-secondary"
+            aria-label="Hint"
           >
             <Lightbulb size={18} />
             <span className="hidden sm:inline">Hint</span>
