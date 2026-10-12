@@ -113,8 +113,6 @@ export class GameEngine extends EventEmitter {
   // Initialize the game
   async initialize(boardSize: number = GAME_CONFIG.BOARD_SIZE): Promise<boolean> {
     try {
-      console.log('🎮 Initializing Game Engine...')
-      
       // Create initial board with no matches but guaranteed moves
       const board = this.createValidBoard(boardSize)
 
@@ -125,11 +123,7 @@ export class GameEngine extends EventEmitter {
       
       this.initialized = true
       this.emit('game:initialized', this.gameState)
-      
       this.startHintTimer()
-      
-      console.log('✅ Game Engine initialized successfully')
-      console.log(`Target score for level ${this.gameState.level}: ${this.gameState.targetScore}`)
       return true
     } catch (error) {
       console.error('❌ Game Engine initialization failed:', error)
@@ -529,8 +523,6 @@ export class GameEngine extends EventEmitter {
     let currentBoard = [...board.map(row => [...row])]
     const powerUpsCreated: PowerUpGem[] = []
 
-    console.log(`🔍 Processing ${initialMatches.length} match groups at combo level ${comboLevel}`)
-    
     this.emit('game:match-found', initialMatches)
 
     // Process each match group
@@ -557,7 +549,6 @@ export class GameEngine extends EventEmitter {
       // Remove matched gems
       for (const gem of matchGroup.gems) {
         if (currentBoard[gem.row][gem.col]) {
-          console.log(`🗑️ Removing gem at (${gem.row},${gem.col}): ${gem.type}`)
           currentBoard[gem.row][gem.col] = null
         }
       }
@@ -568,8 +559,6 @@ export class GameEngine extends EventEmitter {
       currentBoard[powerUp.row][powerUp.col] = powerUp
     }
 
-    console.log(`💰 Total score for this cascade: ${totalScore}`)
-
     // Apply gravity and fill
     currentBoard = this.applyGravity(currentBoard)
     currentBoard = this.fillEmptySpaces(currentBoard)
@@ -578,13 +567,10 @@ export class GameEngine extends EventEmitter {
     const newMatches = this.findAllMatches(currentBoard)
     
     if (newMatches.length > 0) {
-      console.log(`🔄 Found ${newMatches.length} new matches after cascade - continuing...`)
       const cascadeResult = await this.processMatchesAndCascades(currentBoard, newMatches, comboLevel + 1)
       totalScore += cascadeResult.scoreChange
       allMatches.push(...cascadeResult.matchesFound)
       currentBoard = cascadeResult.newBoard
-    } else {
-      console.log('✅ No more matches found - cascade complete')
     }
 
     return {
@@ -627,9 +613,7 @@ export class GameEngine extends EventEmitter {
     // Rush bonus for cascades
     const rushBonus = comboLevel * baseScore
     const finalScore = baseScore + rushBonus
-    
-    console.log(`Match of ${match.length} gems, combo level ${comboLevel}: ${baseScore} + ${rushBonus} = ${finalScore}`)
-    
+
     return finalScore
   }
 

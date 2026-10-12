@@ -387,6 +387,24 @@ describe('GameEngine', () => {
     })
   })
 
+  describe('console output', () => {
+    it('stays silent while playing three moves with hints', async () => {
+      const spies = (['log', 'info', 'warn', 'debug'] as const).map(level => jest.spyOn(console, level).mockImplementation())
+      gameEngine = new GameEngine({ targetScore: 1000000 })
+      await gameEngine.initialize()
+
+      for (let i = 0; i < 3; i++) {
+        gameEngine.showHint()
+        const [move] = gameEngine.getAllPossibleMoves(gameEngine.getGameState().board)
+        await gameEngine.makeMove(move.from.row, move.from.col, move.to.row, move.to.col)
+      }
+
+      const lines = spies.reduce((sum, spy) => sum + spy.mock.calls.length, 0)
+      spies.forEach(spy => spy.mockRestore())
+      expect(lines).toBe(0)
+    })
+  })
+
   describe('move validation', () => {
     beforeEach(async () => {
       await gameEngine.initialize()
