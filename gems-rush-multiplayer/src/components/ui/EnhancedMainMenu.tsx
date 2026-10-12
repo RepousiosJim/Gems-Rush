@@ -9,7 +9,6 @@ import {
   BarChart3,
   CircleHelp,
   Settings,
-  Trophy,
   Star,
   CalendarDays,
   Timer,
@@ -288,10 +287,6 @@ export default function EnhancedMainMenu({
 
       {/* Footer */}
       <div className="relative z-10 mt-auto flex justify-center gap-3 py-6">
-        <button onClick={onShowStats} className="btn btn-ghost">
-          <Trophy className="h-4 w-4" />
-          Leaderboard
-        </button>
         <button onClick={onShowCredits} className="btn btn-ghost">
           <Star className="h-4 w-4" />
           About
