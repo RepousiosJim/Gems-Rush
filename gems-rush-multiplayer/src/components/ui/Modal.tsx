@@ -2,16 +2,14 @@
 
 import { useState, useEffect, useRef } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
+import GemIcon from './GemIcon'
+import { GEM_COLOR_NAMES } from '@/lib/game/goals'
+import type { GemType } from '@/types/game'
 import {
   X,
   Target,
   Gamepad2,
-  Flame,
-  Droplet,
-  Mountain,
-  Wind,
   Zap,
-  Leaf,
   Sparkles,
   Bomb,
   Rows3,
@@ -147,19 +145,10 @@ export function GameGuideModal({ isOpen, onClose }: { isOpen: boolean; onClose: 
 
   const tabs = [
     { id: 'basics', label: 'Basics', icon: Target },
-    { id: 'gems', label: 'Gems', icon: Sparkles },
+    { id: 'gems', label: 'Tiles', icon: Sparkles },
     { id: 'powerups', label: 'Power-ups', icon: Zap },
     { id: 'modes', label: 'Game Modes', icon: Gamepad2 },
   ] as const
-
-  const gems = [
-    { name: 'Fire Gem', desc: 'Passion & energy', icon: Flame },
-    { name: 'Water Gem', desc: 'Flow & adaptability', icon: Droplet },
-    { name: 'Earth Gem', desc: 'Strength & endurance', icon: Mountain },
-    { name: 'Air Gem', desc: 'Freedom & movement', icon: Wind },
-    { name: 'Lightning Gem', desc: 'Power & speed', icon: Zap },
-    { name: 'Nature Gem', desc: 'Growth & harmony', icon: Leaf },
-  ]
 
   const powerups = [
     { name: 'Gem Bomb', icon: Bomb, desc: 'Destroys a 3x3 area around the target. Perfect for clearing difficult areas.' },
@@ -219,20 +208,14 @@ export function GameGuideModal({ isOpen, onClose }: { isOpen: boolean; onClose: 
 
           {activeTab === 'gems' && (
             <div className="space-y-4">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-fg-dim">Gems</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-fg-dim">Gem tiles</h3>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                {gems.map((gem) => {
-                  const GemIcon = gem.icon
-                  return (
-                    <div key={gem.name} className="card bg-ink-2 p-4 flex items-center gap-3">
-                      <GemIcon size={24} className="text-violet" />
-                      <div>
-                        <h4 className="font-semibold text-fg">{gem.name}</h4>
-                        <p className="text-sm text-fg-muted">{gem.desc}</p>
-                      </div>
-                    </div>
-                  )
-                })}
+                {(Object.keys(GEM_COLOR_NAMES) as GemType[]).map((type) => (
+                  <div key={type} className="card bg-ink-2 p-4 flex items-center gap-3">
+                    <GemIcon type={type} size={32} />
+                    <h4 className="font-semibold text-fg capitalize">{GEM_COLOR_NAMES[type]}</h4>
+                  </div>
+                ))}
               </div>
             </div>
           )}
