@@ -75,32 +75,16 @@ interface UserOnboardingProps {
 
 export default function UserOnboarding({ isVisible, onComplete, onSkip }: UserOnboardingProps) {
   const [currentStep, setCurrentStep] = useState(0)
-  const [isAnimating, setIsAnimating] = useState(false)
 
   const handleNext = () => {
-    if (isAnimating) return
-
     if (currentStep === onboardingSteps.length - 1) {
       onComplete()
       return
     }
-
-    setIsAnimating(true)
-    setTimeout(() => {
-      setCurrentStep(prev => Math.min(prev + 1, onboardingSteps.length - 1))
-      setIsAnimating(false)
-    }, 300)
+    setCurrentStep(prev => prev + 1)
   }
 
-  const handlePrevious = () => {
-    if (isAnimating) return
-
-    setIsAnimating(true)
-    setTimeout(() => {
-      setCurrentStep(prev => Math.max(prev - 1, 0))
-      setIsAnimating(false)
-    }, 300)
-  }
+  const handlePrevious = () => setCurrentStep(prev => Math.max(prev - 1, 0))
 
   useEffect(() => {
     if (isVisible) {
@@ -143,77 +127,74 @@ export default function UserOnboarding({ isVisible, onComplete, onSkip }: UserOn
               </button>
             </div>
 
-            <div className="px-8 py-8">
-              <AnimatePresence mode="wait">
-                <motion.div
-                  key={currentStep}
-                  className="text-center"
-                  initial={{ opacity: 0, x: 24 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  exit={{ opacity: 0, x: -24 }}
-                  transition={{ duration: 0.2 }}
-                >
-                  <div className="flex justify-center mb-6">
-                    <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-2 text-violet">
-                      <StepIcon size={32} />
+            <div className="min-h-[31rem] px-8 py-8">
+              <motion.div
+                key={currentStep}
+                className="text-center"
+                initial={{ opacity: 0.4, x: 24 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ duration: 0.2 }}
+              >
+                <div className="flex justify-center mb-6">
+                  <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-surface-2 text-violet">
+                    <StepIcon size={32} />
+                  </div>
+                </div>
+
+                <h2 className="text-2xl font-bold text-fg mb-3">{currentStepData.title}</h2>
+
+                <p className="text-fg-muted leading-relaxed mb-6">{currentStepData.description}</p>
+
+                {currentStep === 2 && (
+                  <div className="grid grid-cols-2 gap-3 mb-2">
+                    <div className="card bg-ink-2 p-3">
+                      <Target className="h-6 w-6 text-good mx-auto mb-1" />
+                      <div className="text-fg text-xs font-medium">Classic</div>
+                    </div>
+                    <div className="card bg-ink-2 p-3">
+                      <Clock className="h-6 w-6 text-warn mx-auto mb-1" />
+                      <div className="text-fg text-xs font-medium">Time Rush</div>
+                    </div>
+                    <div className="card bg-ink-2 p-3">
+                      <CalendarDays className="h-6 w-6 text-violet mx-auto mb-1" />
+                      <div className="text-fg text-xs font-medium">Daily Quest</div>
+                    </div>
+                    <div className="card bg-ink-2 p-3">
+                      <Medal className="h-6 w-6 text-gold mx-auto mb-1" />
+                      <div className="text-fg text-xs font-medium">Campaign</div>
                     </div>
                   </div>
+                )}
 
-                  <h2 className="text-2xl font-bold text-fg mb-3">{currentStepData.title}</h2>
+                {currentStep === 3 && (
+                  <div className="flex justify-center gap-3 mb-2 text-violet">
+                    <Sparkles className="h-7 w-7" />
+                    <Zap className="h-7 w-7" />
+                    <Star className="h-7 w-7" />
+                  </div>
+                )}
 
-                  <p className="text-fg-muted leading-relaxed mb-6">{currentStepData.description}</p>
-
-                  {currentStep === 2 && (
-                    <div className="grid grid-cols-2 gap-3 mb-2">
-                      <div className="card bg-ink-2 p-3">
-                        <Target className="h-6 w-6 text-good mx-auto mb-1" />
-                        <div className="text-fg text-xs font-medium">Classic</div>
-                      </div>
-                      <div className="card bg-ink-2 p-3">
-                        <Clock className="h-6 w-6 text-warn mx-auto mb-1" />
-                        <div className="text-fg text-xs font-medium">Time Rush</div>
-                      </div>
-                      <div className="card bg-ink-2 p-3">
-                        <CalendarDays className="h-6 w-6 text-violet mx-auto mb-1" />
-                        <div className="text-fg text-xs font-medium">Daily Quest</div>
-                      </div>
-                      <div className="card bg-ink-2 p-3">
-                        <Medal className="h-6 w-6 text-gold mx-auto mb-1" />
-                        <div className="text-fg text-xs font-medium">Campaign</div>
-                      </div>
-                    </div>
-                  )}
-
-                  {currentStep === 3 && (
-                    <div className="flex justify-center gap-3 mb-2 text-violet">
-                      <Sparkles className="h-7 w-7" />
-                      <Zap className="h-7 w-7" />
-                      <Star className="h-7 w-7" />
-                    </div>
-                  )}
-
-                  {currentStep === 4 && (
-                    <div className="flex justify-center gap-2 mb-2">
-                      <span className="chip"><Coins size={14} className="text-gold" /> Coins</span>
-                      <span className="chip"><Gem size={14} className="text-violet" /> Gems</span>
-                      <span className="chip"><Star size={14} className="text-gold" /> XP</span>
-                    </div>
-                  )}
-                </motion.div>
-              </AnimatePresence>
+                {currentStep === 4 && (
+                  <div className="flex justify-center gap-2 mb-2">
+                    <span className="chip"><Coins size={14} className="text-gold" /> Coins</span>
+                    <span className="chip"><Gem size={14} className="text-violet" /> Gems</span>
+                    <span className="chip"><Star size={14} className="text-gold" /> XP</span>
+                  </div>
+                )}
+              </motion.div>
             </div>
 
             <div className="flex justify-between items-center px-8 pb-8">
               <button
                 onClick={handlePrevious}
-                disabled={currentStep === 0 || isAnimating}
+                disabled={currentStep === 0}
                 className="btn btn-ghost"
               >
                 <ArrowLeft size={16} />
                 Back
               </button>
 
-              <button onClick={handleNext} disabled={isAnimating} className="btn btn-primary">
+              <button onClick={handleNext} className="btn btn-primary">
                 {currentStepData.action || 'Next'}
                 {!currentStepData.action && <ArrowRight size={16} />}
               </button>
