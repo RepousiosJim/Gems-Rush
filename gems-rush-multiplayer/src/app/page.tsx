@@ -68,6 +68,7 @@ interface UserStatsType {
   gems: number
   streak: number
   gamesPlayed: number
+  gamesWon: number
   totalScore: number
   averageScore: number
   bestScore: number
@@ -135,6 +136,7 @@ export default function HomePage() {
     gems: 10,
     streak: 0,
     gamesPlayed: 0,
+    gamesWon: 0,
     totalScore: 0,
     averageScore: 0,
     bestScore: 0,
@@ -245,6 +247,7 @@ export default function HomePage() {
 
           // Update stats with current energy and event
           const updatedStats = {
+            ...userStats, // defaults for fields missing from older saves
             ...parsedStats,
             energy: regenerated.energy,
             maxEnergy: validMaxEnergy,
@@ -363,8 +366,7 @@ export default function HomePage() {
         ...prev,
         // The clock keeps its partial progress; a full bar starts regenerating from now
         energy: energyManager.consumeEnergy(regenerated.energy, 'game'),
-        lastEnergyUpdate: regenerated.lastUpdate,
-        gamesPlayed: prev.gamesPlayed + 1
+        lastEnergyUpdate: regenerated.lastUpdate
       }
     })
   }
@@ -372,7 +374,7 @@ export default function HomePage() {
   const canStartNewGame = () =>
     energyManager.getEnergyStatus(userStats.energy, userStats.lastEnergyUpdate, userStats.maxEnergy).canPlayGame
 
-  // Record the result of the open round once: rewards, score stats and the win energy bonus
+  // Record the result of the open round once: rewards, game and score stats, and the win energy bonus
   const settleRound = (
     score: number,
     won: boolean,
@@ -383,13 +385,15 @@ export default function HomePage() {
     roundOpenRef.current = false
 
     setUserStats(prev => {
+      const gamesPlayed = prev.gamesPlayed + 1
       const totalScore = prev.totalScore + score
-      const rewarded = addRewards(prev, rewards)
       return {
-        ...rewarded,
+        ...addRewards(prev, rewards),
         energy: won ? Math.min(prev.energy + 1, prev.maxEnergy) : prev.energy,
+        gamesPlayed,
+        gamesWon: prev.gamesWon + (won ? 1 : 0),
         totalScore,
-        averageScore: Math.floor(totalScore / Math.max(prev.gamesPlayed, 1)),
+        averageScore: Math.floor(totalScore / gamesPlayed),
         bestScore: Math.max(prev.bestScore, score),
         ...patch?.(prev)
       }
@@ -694,7 +698,6 @@ export default function HomePage() {
         
           {/* Game modals */}
           <SettingsModal isOpen={modalState === 'settings'} onClose={closeModal} />
-          <StatisticsModal isOpen={modalState === 'statistics'} onClose={closeModal} />
         </>
       )
     }
@@ -774,7 +777,7 @@ export default function HomePage() {
         
           {/* Modals */}
           <SettingsModal isOpen={modalState === 'settings'} onClose={closeModal} />
-          <StatisticsModal isOpen={modalState === 'statistics'} onClose={closeModal} />
+          <StatisticsModal isOpen={modalState === 'statistics'} onClose={closeModal} stats={userStats} />
           <GameGuideModal isOpen={modalState === 'guide'} onClose={closeModal} />
           <CreditsModal isOpen={modalState === 'credits'} onClose={closeModal} />
         </>
