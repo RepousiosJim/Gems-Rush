@@ -369,52 +369,6 @@ export const SUCCESS_MESSAGES = {
   SETTINGS_SAVED: 'Settings saved successfully'
 } as const
 
-// Power-up configurations
-export const POWER_UP_CONFIGS = {
-  BOMB: {
-    name: 'Gem Bomb',
-    description: 'Destroys a 3x3 area around the target',
-    cost: { coins: 50 },
-    cooldown: 0,
-    unlockLevel: 1
-  },
-  ROW_CLEAR: {
-    name: 'Row Blaster',
-    description: 'Clears an entire row',
-    cost: { coins: 75 },
-    cooldown: 0,
-    unlockLevel: 3
-  },
-  COL_CLEAR: {
-    name: 'Column Crusher',
-    description: 'Clears an entire column',
-    cost: { coins: 75 },
-    cooldown: 0,
-    unlockLevel: 3
-  },
-  COLOR_BLAST: {
-    name: 'Color Bomb',
-    description: 'Removes all gems of the selected color',
-    cost: { coins: 100 },
-    cooldown: 30000,
-    unlockLevel: 5
-  },
-  SHUFFLE: {
-    name: 'Divine Shuffle',
-    description: 'Shuffles the entire board',
-    cost: { gems: 1 },
-    cooldown: 60000,
-    unlockLevel: 8
-  },
-  TIME_FREEZE: {
-    name: 'Time Freeze',
-    description: 'Stops the timer for 10 seconds',
-    cost: { gems: 2 },
-    cooldown: 120000,
-    unlockLevel: 10
-  }
-} as const
-
 // Game Events
 export const EVENT_TYPES = {
   // Core game events
