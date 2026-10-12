@@ -149,12 +149,12 @@ export function GameGuideModal({ isOpen, onClose }: { isOpen: boolean; onClose: 
 
   const powerups = [
     { name: 'Lightning', icon: Zap, desc: 'Made by a straight line of 4. Clears its whole row and column.' },
-    { name: 'Rainbow', icon: Sparkles, desc: 'Made by a straight line of 5. Clears every gem of the colour it is swapped with.' },
+    { name: 'Rainbow', icon: Sparkles, desc: 'Made by a straight line of 5. Clears every gem of the color it is swapped with.' },
     { name: 'Bomb', icon: Bomb, desc: 'Made by a straight line of 6 or more. Clears the 3x3 area around it.' },
   ]
 
   const modes = [
-    { name: 'Classic', icon: Target, desc: 'Levels with a move limit. Reach the goal, a score or a set number of gems per colour, before the moves run out.' },
+    { name: 'Classic', icon: Target, desc: 'Levels with a move limit. Reach the goal, a score or a set number of gems per color, before the moves run out.' },
     { name: 'Time Rush', icon: Clock, desc: 'Score as many points as you can in 60 seconds.' },
     { name: 'Daily Quest', icon: CalendarDays, desc: 'One round a day. Reach the target score; no move limit.' },
     { name: 'Divine Conquest', icon: Swords, desc: 'Locked.' },
@@ -225,7 +225,7 @@ export function GameGuideModal({ isOpen, onClose }: { isOpen: boolean; onClose: 
                 })}
               </div>
               <p className="text-fg-muted text-sm">
-                Swap a power-up with a neighbouring gem to set it off. When no move is left, the board reshuffles by itself. Moves left when a level is won set off random power-ups.
+                Swap a power-up with a neighboring gem to set it off. When no move is left, the board reshuffles by itself. Moves left when a level is won set off random power-ups.
               </p>
             </div>
           )}
