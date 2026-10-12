@@ -291,7 +291,9 @@ const GameInterfaceContent = ({ gameState, onMove, onRestart, onNextLevel, onPau
           <div className="text-xs text-fg-muted">
             {isStageMode && gameState.currentStage
               ? `Stage ${gameState.currentStage}`
-              : `Level ${gameState.level} · Classic`}
+              : gameState.gameMode === 'dailyChallenge'
+                ? 'Daily Quest'
+                : `Level ${gameState.level} · Classic`}
           </div>
         </div>
 

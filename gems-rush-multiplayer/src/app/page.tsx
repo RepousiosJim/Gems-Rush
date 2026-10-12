@@ -49,6 +49,12 @@ const classicRewards = (score: number): Rewards => ({
 const starsFor = (score: number, targetScore: number) =>
   score >= targetScore * 2.5 ? 3 : score >= targetScore * 1.8 ? 2 : 1
 
+const dateKey = (daysAgo = 0) => {
+  const date = new Date()
+  date.setDate(date.getDate() - daysAgo)
+  return date.toLocaleDateString('en-CA')
+}
+
 type AppState = 'menu' | 'game' | 'timeRush' | 'loading' | 'stageSelect'
 type ModalState = 'settings' | 'guide' | 'credits' | 'statistics' | 'dashboard' | null
 
@@ -75,6 +81,7 @@ interface UserStatsType {
   bestTimeRushScore: number // New: Track best Time Rush score
   timeRushGamesPlayed: number // New: Track Time Rush games played
   dailyChallengeCompleted: boolean
+  lastDailyChallengeDate: string // local YYYY-MM-DD of the last completed Daily Quest
   achievements: Array<{
     id: string
     name: string
@@ -143,6 +150,7 @@ export default function HomePage() {
     bestTimeRushScore: 0,
     timeRushGamesPlayed: 0,
     dailyChallengeCompleted: false,
+    lastDailyChallengeDate: '',
     achievements: [],
     favoriteMode: 'Classic',
     totalPlayTime: 0,
@@ -166,6 +174,8 @@ export default function HomePage() {
   const timeRushExitRef = useRef<NodeJS.Timeout | null>(null)
   // True from the moment a round starts until its result is recorded, so a round settles exactly once
   const roundOpenRef = useRef(false)
+  const userStatsRef = useRef(userStats)
+  userStatsRef.current = userStats
 
   const [currentHint, setCurrentHint] = useState<{ from: { row: number; col: number }; to: { row: number; col: number } } | null>(null)
   const [winRewards, setWinRewards] = useState<(Rewards & { stars: number }) | null>(null)
@@ -246,9 +256,12 @@ export default function HomePage() {
           }
 
           // Update stats with current energy and event
+          const lastDaily = parsedStats.lastDailyChallengeDate
           const updatedStats = {
             ...userStats, // defaults for fields missing from older saves
             ...parsedStats,
+            dailyChallengeCompleted: lastDaily === dateKey(),
+            streak: lastDaily === dateKey() || lastDaily === dateKey(1) ? parsedStats.streak : 0,
             energy: regenerated.energy,
             maxEnergy: validMaxEnergy,
             lastEnergyUpdate: regenerated.lastUpdate,
@@ -404,14 +417,25 @@ export default function HomePage() {
 
   const winRound = (state: GameState) => {
     let rewards: Rewards & { stars: number }
+    let patch: ((prev: UserStatsType) => Partial<UserStatsType>) | undefined
     if (state.gameMode === 'stage' && state.currentStage) {
       rewards = stageSystem.completeStage(state.currentStage, state.score, state.moves, state.blocksDestroyed ?? 0).rewards
+    } else if (state.gameMode === 'dailyChallenge' && userStatsRef.current.lastDailyChallengeDate === dateKey()) {
+      // The Daily Quest pays once per calendar day
+      rewards = { ...NO_REWARDS, stars: starsFor(state.score, state.targetScore) }
     } else {
       rewards = { ...classicRewards(state.score), stars: starsFor(state.score, state.targetScore) }
+      if (state.gameMode === 'dailyChallenge') {
+        patch = prev => ({
+          dailyChallengeCompleted: true,
+          lastDailyChallengeDate: dateKey(),
+          streak: prev.lastDailyChallengeDate === dateKey(1) ? prev.streak + 1 : 1
+        })
+      }
     }
 
     setWinRewards(rewards)
-    settleRound(state.score, true, rewards)
+    settleRound(state.score, true, rewards, patch)
     disposeEngine()
   }
 
