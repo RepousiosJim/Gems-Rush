@@ -12,9 +12,6 @@ import {
   Zap,
   Sparkles,
   Bomb,
-  Rows3,
-  Columns3,
-  Shuffle,
   Clock,
   CalendarDays,
   Swords,
@@ -151,11 +148,9 @@ export function GameGuideModal({ isOpen, onClose }: { isOpen: boolean; onClose: 
   ] as const
 
   const powerups = [
-    { name: 'Gem Bomb', icon: Bomb, desc: 'Destroys a 3x3 area around the target. Perfect for clearing difficult areas.' },
-    { name: 'Row Blaster', icon: Rows3, desc: 'Clears an entire row of gems instantly. Great for creating space for new combos.' },
-    { name: 'Column Crusher', icon: Columns3, desc: 'Eliminates a complete column. Use strategically to set up cascade opportunities.' },
-    { name: 'Color Bomb', icon: Sparkles, desc: 'Removes all gems of the selected color from the board. Massive score potential.' },
-    { name: 'Shuffle', icon: Shuffle, desc: 'Shuffles the entire board when you’re stuck. New opportunities await.' },
+    { name: 'Lightning', icon: Zap, desc: 'Made by a straight line of 4. Clears its whole row and column.' },
+    { name: 'Rainbow', icon: Sparkles, desc: 'Made by a straight line of 5. Clears every gem of the colour it is swapped with.' },
+    { name: 'Bomb', icon: Bomb, desc: 'Made by a straight line of 6 or more. Clears the 3x3 area around it.' },
   ]
 
   const modes = [
@@ -222,7 +217,7 @@ export function GameGuideModal({ isOpen, onClose }: { isOpen: boolean; onClose: 
 
           {activeTab === 'powerups' && (
             <div className="space-y-4">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-fg-dim">Power-ups & Special Effects</h3>
+              <h3 className="text-sm font-semibold uppercase tracking-wider text-fg-dim">Power-ups</h3>
               <div className="divide-y divide-line">
                 {powerups.map((p) => {
                   const PIcon = p.icon
@@ -237,6 +232,9 @@ export function GameGuideModal({ isOpen, onClose }: { isOpen: boolean; onClose: 
                   )
                 })}
               </div>
+              <p className="text-fg-muted text-sm">
+                Swap a power-up with a neighbouring gem to set it off. When no move is left, the board reshuffles by itself. Moves left when a level is won set off random power-ups.
+              </p>
             </div>
           )}
 
