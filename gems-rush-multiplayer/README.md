@@ -1,6 +1,6 @@
-# 🔮 Gems Rush: Divine Teams - Multiplayer Match-3 Game
+# 🔮 Gems Rush: Divine Teams - Match-3 Puzzle Game
 
-A modern, multiplayer match-3 puzzle game built with Next.js 14, TypeScript, and real-time multiplayer capabilities.
+A modern match-3 puzzle game built with Next.js 14 and TypeScript. Playable modes are Classic (endless), Time Rush and a daily challenge; real-time multiplayer is planned (see Phase 3 below) but not playable yet.
 
 ## 🚀 **Current Status: Phase 1 Complete**
 

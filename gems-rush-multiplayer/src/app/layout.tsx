@@ -17,11 +17,11 @@ const geistMono = Geist_Mono({
 
 export const metadata: Metadata = {
   title: {
-    default: "Gems Rush: Divine Teams - Match-3 Multiplayer Game",
+    default: "Gems Rush: Divine Teams – Match-3 Puzzle Game",
     template: "%s | Gems Rush"
   },
-  description: "Experience the ultimate match-3 battle game with divine gems, multiplayer action, and progressive divine realms. Play solo or compete with friends in real-time!",
-  keywords: ["match-3", "puzzle game", "multiplayer", "divine gems", "battle", "strategy"],
+  description: "A match-3 puzzle game with five elemental gems. Play endless Classic mode, race the clock in Time Rush, or take on the daily challenge. Multiplayer is coming later.",
+  keywords: ["match-3", "puzzle game", "divine gems", "time rush", "daily challenge", "strategy"],
   authors: [{ name: "Gems Rush Team" }],
   creator: "Gems Rush Team",
   publisher: "Gems Rush",
@@ -36,7 +36,7 @@ export const metadata: Metadata = {
     locale: 'en_US',
     url: '/',
     title: 'Gems Rush: Divine Teams',
-    description: 'The ultimate match-3 multiplayer game with divine gems and strategic battles',
+    description: 'A match-3 puzzle game with elemental gems: endless Classic mode, Time Rush and a daily challenge. Multiplayer is coming later.',
     siteName: 'Gems Rush',
     images: [
       {
@@ -50,7 +50,7 @@ export const metadata: Metadata = {
   twitter: {
     card: 'summary_large_image',
     title: 'Gems Rush: Divine Teams',
-    description: 'The ultimate match-3 multiplayer game with divine gems and strategic battles',
+    description: 'A match-3 puzzle game with elemental gems: endless Classic mode, Time Rush and a daily challenge. Multiplayer is coming later.',
     images: ['/og-image.png'],
   },
   robots: {
